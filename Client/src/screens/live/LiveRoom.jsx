@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from 'react'
 import ReactPlayer from "react-player"
-import { parsePath, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import peer from '../../service/PeerService'
 import { SocketContext } from '../../context/SocketProvider'
 

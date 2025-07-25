@@ -15,48 +15,174 @@ function LiveLobby() {
     
     return (
         <div style={styles.container}>
-            <h1 style={styles.heading}>Lobby</h1>
+            <div style={styles.card}>
+                <div style={styles.header}>
+                    <div style={styles.icon}>🔴</div>
+                    <h1 style={styles.title}>Join Live Chat</h1>
+                    <p style={styles.subtitle}>Enter a room ID to start your live video conversation</p>
+                </div>
 
-            <label htmlFor="roomId" style={styles.label}>Enter the Room id</label>
-            <input type="text" id="roomId" name="roomId" style={styles.input} value={roomId} onChange={e => setRoomId(e.target.value)} />
+                <div style={styles.form}>
+                    <label htmlFor="roomId" style={styles.label}>Room ID</label>
+                    <input 
+                        type="text" 
+                        id="roomId" 
+                        name="roomId" 
+                        style={styles.input} 
+                        value={roomId} 
+                        onChange={e => setRoomId(e.target.value)}
+                        placeholder="Enter room ID..."
+                    />
 
-            <button style={styles.button} onClick={handleJoin}>Join</button>
+                    <button 
+                        style={{
+                            ...styles.button,
+                            ...(roomId ? styles.buttonEnabled : styles.buttonDisabled)
+                        }} 
+                        onClick={handleJoin}
+                        disabled={!roomId}
+                    >
+                        <span style={styles.buttonIcon}>🚀</span>
+                        Join Room
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
 
 const styles = {
     container: {
+        height: '100%',
+        minHeight: 'calc(100vh - 80px)',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '60vh',
+        padding: '20px',
+        backgroundColor: '#0f0f0f',
+        color: '#ffffff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     },
-    input: {
-        margin: '10px 0',
-        padding: '10px',
-        fontSize: '16px',
-        borderRadius: '5px',
-        border: '1px solid #ccc',
-        outline: 'none',
+    card: {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '20px',
+        padding: '32px',
+        maxWidth: '380px',
+        width: '100%',
+        backdropFilter: 'blur(20px)',
+        boxShadow: '0 15px 45px rgba(0, 0, 0, 0.4)',
+    },
+    header: {
+        textAlign: 'center',
+        marginBottom: '24px',
+    },
+    icon: {
+        fontSize: '36px',
+        marginBottom: '12px',
+        filter: 'drop-shadow(0 0 12px rgba(255, 107, 107, 0.5))',
+    },
+    title: {
+        fontSize: '24px',
+        fontWeight: '700',
+        margin: '0 0 8px 0',
+        background: 'linear-gradient(45deg, #ff6b6b, #ffffff)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+    },
+    subtitle: {
+        fontSize: '14px',
+        color: '#888',
+        margin: 0,
+        lineHeight: '1.4',
+    },
+    form: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
     },
     label: {
-        margin: '10px 0 5px',
-        fontSize: '18px',
+        fontSize: '14px',
+        fontWeight: '600',
+        color: '#cccccc',
+        marginBottom: '4px',
     },
-    heading: {
-        fontSize: '32px',
-        marginBottom: '20px',
+    input: {
+        padding: '12px 16px',
+        fontSize: '14px',
+        borderRadius: '10px',
+        border: '2px solid rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        color: '#ffffff',
+        outline: 'none',
+        transition: 'all 0.3s ease',
+        fontFamily: 'inherit',
     },
     button: {
-        padding: '10px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '12px 20px',
         fontSize: '16px',
-        borderRadius: '5px',
+        fontWeight: '600',
+        borderRadius: '10px',
         border: 'none',
-        backgroundColor: 'blue',
-        color: 'white',
         cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        marginTop: '4px',
+    },
+    buttonEnabled: {
+        background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
+        color: '#ffffff',
+        transform: 'translateY(0)',
+        boxShadow: '0 6px 24px rgba(255, 107, 107, 0.3)',
+    },
+    buttonDisabled: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        color: '#666',
+        cursor: 'not-allowed',
+    },
+    buttonIcon: {
+        fontSize: '16px',
+    },
+    '@media (max-width: 768px)': {
+        container: {
+            padding: '16px',
+            minHeight: '60vh',
+        },
+        card: {
+            padding: '20px',
+            maxWidth: '100%',
+            margin: '0 auto',
+        },
+        title: {
+            fontSize: '20px',
+        },
+        icon: {
+            fontSize: '30px',
+        },
+        input: {
+            padding: '10px 14px',
+            fontSize: '16px',
+        },
+        button: {
+            padding: '12px 16px',
+            fontSize: '14px',
+        },
+    },
+    '@media (max-width: 480px)': {
+        card: {
+            padding: '16px',
+            borderRadius: '16px',
+        },
+        title: {
+            fontSize: '18px',
+        },
+        subtitle: {
+            fontSize: '13px',
+        },
     },
 };
 
