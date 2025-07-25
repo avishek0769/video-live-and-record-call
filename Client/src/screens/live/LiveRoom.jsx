@@ -27,6 +27,7 @@ function LiveRoom() {
 
     const handleCall = useCallback(async () => {
         setCalled(true)
+        setIsConnected(false)
         const offer = await peer.getOffer()
         // console.log("Remote Socket id -->", remoteSocketId)
         // socket.emit("call-user", { to: remoteSocketId, offer }) // Sending the offer immediately after creating it - !
@@ -47,7 +48,7 @@ function LiveRoom() {
     const handleCallAcceptedConfirm = useCallback(async ({ answer, from }) => {
         console.log("Signaling state before setting answer:", peer.peer.signalingState);
 
-        if(!peer.peer.remoteDescription){
+        if (!peer.peer.remoteDescription) {
             await peer.setRemoteDescription(answer)
         }
         console.log("Confirm Answer --> ", answer);
@@ -76,7 +77,7 @@ function LiveRoom() {
 
     const handleNegoNeedFinal = useCallback(async ({ ans }) => {
         console.log("Nego Final --> ", ans);
-        if(!peer.peer.remoteDescription){
+        if (!peer.peer.remoteDescription) {
             await peer.setRemoteDescription(answer)
         }
         setNoOfOffers(prev => ++prev)
@@ -91,7 +92,7 @@ function LiveRoom() {
                     console.log(peer.peer.localDescription);
                 }
                 else {
-                    if(called){
+                    if (called) {
                         socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
                     }
                     else {
@@ -101,7 +102,22 @@ function LiveRoom() {
                 }
             };
 
+            peer.peer.onconnectionstatechange = () => {
+                if (peer.peer.connectionState === 'connected') {
+                    setIsConnected(true);
+                }
+                else {
+                    setIsConnected(false);
+                }
+            };
+
             peer.peer.oniceconnectionstatechange = () => {
+                if (peer.peer.iceConnectionState === 'connected') {
+                    setIsConnected(true);
+                }
+                else {
+                    setIsConnected(false);
+                }
                 console.log('ICE State:', peer.peer.iceConnectionState);
             };
 
@@ -124,17 +140,10 @@ function LiveRoom() {
                 console.log("Sending streams....", track)
             }
         }
-        if (noOfOffers == 2 && called) {
-            handleNegoNeeded()
-            setIsConnected(true)
-        }
-        else if (noOfOffers == 3 && !called) {
-            // for (const track of myStream.getTracks()) {
-            //     peer.peer.addTrack(track, myStream)
-            //     console.log("Sending streams....", track)
-            // }
-            setIsConnected(true)
-        }
+        // if (noOfOffers == 2 && called) {
+        //     handleNegoNeeded()
+        //     setIsConnected(true)
+        // }
     }, [noOfOffers, myStream])
 
     useEffect(() => {
@@ -165,62 +174,174 @@ function LiveRoom() {
 
 
     return (
-        <>
-            <div style={styles.container}>
-                {myStream && <ReactPlayer url={myStream} muted playing />}
-                {remoteStream && <ReactPlayer url={remoteStream} playing style={{ marginTop: 20 }} />}
-            </div>
+        <div className="min-h-screen bg-gray-950 text-white font-sans">
+            {/* Header */}
+            <header className="px-6 py-4 border-b border-gray-700 bg-black/30 backdrop-blur-lg sticky top-0 z-50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="text-2xl drop-shadow-lg">🔴</div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
+                            Live Video Call
+                        </h1>
+                    </div>
 
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", marginTop: 10 }}>
-                <div style={{ display: isConnected != null ? "none" : "block" }}>
-                    {remoteSocketId ? <h2>User Joined ! Waiting for someone to call...</h2> : <h2>Waiting for the other user to join.... </h2>}
+                    {/* Connection Status */}
+                    <div className="flex items-center gap-2">
+                        {isConnected === true ? (
+                            <>
+                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-green-400 text-sm font-medium">Connected</span>
+                            </>
+                        ) : isConnected === false ? (
+                            <>
+                                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                                <span className="text-yellow-400 text-sm font-medium">Connecting...</span>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                                <span className="text-gray-400 text-sm font-medium">Waiting</span>
+                            </>
+                        )}
+                    </div>
                 </div>
-                {isConnected == true ? <h1 style={{ color: "green" }}>Connected !</h1> : isConnected == false ? <h1>Connecting....</h1> : remoteSocketId && <button onClick={handleCall} style={styles.callBtn}>Call</button>}
-                {remoteSocketId && <button onClick={() => navigate("/")} style={styles.stopBtn}>Stop</button>}
-            </div>
-        </>
-    )
-}
+            </header>
 
-const styles = {
-    callBtn: {
-        padding: '10px 0',
-        width: "90%",
-        backgroundColor: '#4CAF50',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '18px',
-        marginTop: '20px'
-    },
-    stopBtn: {
-        padding: '10px 0',
-        width: "90%",
-        backgroundColor: 'red',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '18px',
-        marginTop: '20px'
-    },
-    sendStreamBtn: {
-        padding: '10px 120px',
-        backgroundColor: 'blue',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '16px',
-        marginTop: '20px'
-    },
-    container: {
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexDirection: "column"
-    }
+            {/* Video Container */}
+            <div className="flex-1 p-4 md:p-6">
+                <div className="h-[calc(100vh-120px)] flex flex-col md:flex-row gap-4 md:gap-6">
+                    {/* My Video */}
+                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                        <div className="h-full relative">
+                            {myStream ? (
+                                <ReactPlayer
+                                    url={myStream}
+                                    muted
+                                    playing
+                                    width="100%"
+                                    height="100%"
+                                    style={{ objectFit: 'cover' }}
+                                />
+                            ) : (
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <div className="text-6xl md:text-8xl mb-4 opacity-30">📹</div>
+                                        <p className="text-gray-400">Loading camera...</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Video Label */}
+                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                <span className="text-white text-sm font-medium">You</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Remote Video */}
+                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                        <div className="h-full relative">
+                            {remoteStream ? (
+                                <ReactPlayer
+                                    url={remoteStream}
+                                    playing
+                                    width="100%"
+                                    height="100%"
+                                    style={{ objectFit: 'cover' }}
+                                />
+                            ) : (
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <div className="text-6xl md:text-8xl mb-4 opacity-30">👤</div>
+                                        <p className="text-gray-400">
+                                            {remoteSocketId ? "Waiting for video..." : "Waiting for participant..."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Video Label */}
+                            {remoteStream && (
+                                <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                    <span className="text-white text-sm font-medium">Participant</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Control Panel */}
+            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
+                <div className="p-4 md:p-6">
+                    {/* Status Message */}
+                    {isConnected === null && (
+                        <div className="text-center mb-4">
+                            <p className="text-gray-300 text-sm md:text-base">
+                                {remoteSocketId
+                                    ? "✅ Participant joined! Ready to start call..."
+                                    : "⏳ Waiting for participant to join..."
+                                }
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Control Buttons */}
+                    <div className="flex items-center justify-center gap-3 md:gap-4">
+                        {/* Call Button */}
+                        {isConnected === null && remoteSocketId && (
+                            <button
+                                onClick={handleCall}
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105"
+                            >
+                                <span className="text-lg">📞</span>
+                                <span className="hidden md:inline">Start Call</span>
+                            </button>
+                        )}
+
+                        {/* End Call Button */}
+                        {remoteSocketId && (
+                            <button
+                                onClick={() => navigate("/live")}
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105"
+                            >
+                                <span className="text-lg">📞</span>
+                                <span className="hidden md:inline">End Call</span>
+                            </button>
+                        )}
+
+                        {/* Back Button */}
+                        {!remoteSocketId && (
+                            <button
+                                onClick={() => navigate("/live")}
+                                className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-xl transition-all duration-300 hover:bg-white/20"
+                            >
+                                <span className="text-lg">←</span>
+                                <span className="hidden md:inline">Back to Home</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Connection Status Text */}
+                    {isConnected === true && (
+                        <div className="text-center mt-3">
+                            <p className="text-green-400 text-sm font-medium">
+                                🎉 Call connected successfully!
+                            </p>
+                        </div>
+                    )}
+
+                    {isConnected === false && (
+                        <div className="text-center mt-3">
+                            <p className="text-yellow-400 text-sm font-medium">
+                                🔄 Establishing connection, this may take a while...
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
 }
 
 export default LiveRoom

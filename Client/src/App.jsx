@@ -39,18 +39,18 @@ function App() {
               </div>
             </header>
 
-            <div className="flex flex-col md:flex-row min-h-[calc(100vh-80px)]">
+            <div className="flex flex-col md:flex-row min-h-[calc(100vh-320px)]">
               {/* Left Side - Navigation */}
-              <div className="w-full md:w-1/2 min-h-[40vh] md:min-h-auto bg-gradient-to-br from-gray-950 to-gray-950 flex flex-col order-1">
+              <div className="w-full md:mt-[-4rem] md:w-1/2 min-h-[22vh] md:min-h-auto bg-gradient-to-br from-gray-950 to-gray-950 flex flex-col order-1">
                 <main className="flex items-center justify-center flex-1 p-4 md:p-5">
                   <div className="text-center max-w-md w-full px-2 md:px-0">
                     <h2 className="text-xl md:text-3xl font-extrabold mb-2 md:mb-3 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent leading-tight">
                       {currentCategory === "record" ? "🎥 Recording Mode" : "🔴 Live Mode"}
                     </h2>
-                    <p className="text-xs md:text-sm text-gray-400 mb-4 md:mb-8 leading-relaxed">
+                    <p className="text-sm md:text-sm text-gray-400 mb-4 md:mb-8 leading-relaxed">
                       {currentCategory === "record" 
-                        ? "Create and save video recordings" 
-                        : "Start live video conversations"
+                        ? "Walkie-Talkie with video, record and send instantly without saving" 
+                        : "Real-time video conversations, perfect for meetings"
                       }
                     </p>
                     
@@ -75,7 +75,7 @@ function App() {
                         }`}
                       >
                         <span className="text-sm md:text-base drop-shadow-sm">🎥</span>
-                        Record
+                        Recording
                       </button>
                     </div>
                   </div>
@@ -83,7 +83,7 @@ function App() {
               </div>
 
               {/* Right Side - Outlet */}
-              <div className="w-full md:w-1/2 min-h-[60vh] md:min-h-auto bg-gray-950 order-2">
+              <div className="w-full md:w-1/2 min-h-[25vh] mt-[-4rem] md:min-h-auto bg-gray-950 order-2">
                 <Outlet />
               </div>
             </div>
