@@ -8,7 +8,7 @@ function App() {
   const route = useLocation()
 
   useEffect(() => {
-    setcurrentCategory("record")
+    setcurrentCategory("live")
   }, [])
 
   useEffect(() => {
