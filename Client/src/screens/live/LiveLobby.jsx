@@ -11,38 +11,45 @@ function LiveLobby() {
         console.log("JOI")
         socket.emit("join-user", { roomId })
         navigate("/live/room")
-    })
+    }, [roomId, socket, navigate])
     
     return (
-        <div style={styles.container}>
-            <div style={styles.card}>
-                <div style={styles.header}>
-                    <div style={styles.icon}>🔴</div>
-                    <h1 style={styles.title}>Join Live Chat</h1>
-                    <p style={styles.subtitle}>Enter a room ID to start your live video conversation</p>
+        <div className="h-full min-h-[60vh] md:min-h-[calc(100vh-80px)] flex items-center justify-center p-4 md:p-5 bg-gray-950 text-white font-sans">
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl md:rounded-2xl p-4 md:p-8 max-w-full md:max-w-sm w-full backdrop-blur-2xl shadow-2xl mx-auto">
+                <div className="text-center mb-6">
+                    <div className="text-3xl md:text-4xl mb-3 drop-shadow-lg filter-drop-shadow-red">🔴</div>
+                    <h1 className="text-lg md:text-2xl font-bold mb-2 bg-gradient-to-r from-red-400 to-white bg-clip-text text-transparent">
+                        Join Live Mode
+                    </h1>
+                    <p className="text-sm md:text-sm text-gray-400 leading-relaxed">
+                        Enter the room ID shared to you, or enter a new one and share it to others to start your live video conversation
+                    </p>
                 </div>
 
-                <div style={styles.form}>
-                    <label htmlFor="roomId" style={styles.label}>Room ID</label>
+                <div className="flex flex-col gap-4">
+                    <label htmlFor="roomId" className="text-sm font-semibold text-gray-300 mb-1">
+                        Room ID
+                    </label>
                     <input 
                         type="text" 
                         id="roomId" 
                         name="roomId" 
-                        style={styles.input} 
+                        className="px-3 py-2 md:px-4 md:py-3 text-sm md:text-base rounded-lg border-2 border-white/10 bg-white/5 text-white outline-none transition-all duration-300 font-inherit focus:border-white/20 focus:bg-white/10" 
                         value={roomId} 
                         onChange={e => setRoomId(e.target.value)}
                         placeholder="Enter room ID..."
                     />
 
                     <button 
-                        style={{
-                            ...styles.button,
-                            ...(roomId ? styles.buttonEnabled : styles.buttonDisabled)
-                        }} 
+                        className={`flex items-center justify-center gap-2 px-4 py-3 md:px-5 md:py-3 text-sm md:text-base font-semibold rounded-lg border-none cursor-pointer transition-all duration-300 mt-1 ${
+                            roomId 
+                                ? "bg-gradient-to-r from-red-400 to-teal-400 text-white shadow-lg shadow-red-400/30 hover:shadow-red-400/40" 
+                                : "bg-white/5 text-gray-500 cursor-not-allowed"
+                        }`}
                         onClick={handleJoin}
                         disabled={!roomId}
                     >
-                        <span style={styles.buttonIcon}>🚀</span>
+                        <span className="text-base">🚀</span>
                         Join Room
                     </button>
                 </div>
@@ -50,140 +57,5 @@ function LiveLobby() {
         </div>
     );
 }
-
-const styles = {
-    container: {
-        height: '100%',
-        minHeight: 'calc(100vh - 80px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        backgroundColor: '#0f0f0f',
-        color: '#ffffff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    },
-    card: {
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '380px',
-        width: '100%',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 15px 45px rgba(0, 0, 0, 0.4)',
-    },
-    header: {
-        textAlign: 'center',
-        marginBottom: '24px',
-    },
-    icon: {
-        fontSize: '36px',
-        marginBottom: '12px',
-        filter: 'drop-shadow(0 0 12px rgba(255, 107, 107, 0.5))',
-    },
-    title: {
-        fontSize: '24px',
-        fontWeight: '700',
-        margin: '0 0 8px 0',
-        background: 'linear-gradient(45deg, #ff6b6b, #ffffff)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text',
-    },
-    subtitle: {
-        fontSize: '14px',
-        color: '#888',
-        margin: 0,
-        lineHeight: '1.4',
-    },
-    form: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-    },
-    label: {
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#cccccc',
-        marginBottom: '4px',
-    },
-    input: {
-        padding: '12px 16px',
-        fontSize: '14px',
-        borderRadius: '10px',
-        border: '2px solid rgba(255, 255, 255, 0.1)',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        color: '#ffffff',
-        outline: 'none',
-        transition: 'all 0.3s ease',
-        fontFamily: 'inherit',
-    },
-    button: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        padding: '12px 20px',
-        fontSize: '16px',
-        fontWeight: '600',
-        borderRadius: '10px',
-        border: 'none',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        marginTop: '4px',
-    },
-    buttonEnabled: {
-        background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
-        color: '#ffffff',
-        transform: 'translateY(0)',
-        boxShadow: '0 6px 24px rgba(255, 107, 107, 0.3)',
-    },
-    buttonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        color: '#666',
-        cursor: 'not-allowed',
-    },
-    buttonIcon: {
-        fontSize: '16px',
-    },
-    '@media (max-width: 768px)': {
-        container: {
-            padding: '16px',
-            minHeight: '60vh',
-        },
-        card: {
-            padding: '20px',
-            maxWidth: '100%',
-            margin: '0 auto',
-        },
-        title: {
-            fontSize: '20px',
-        },
-        icon: {
-            fontSize: '30px',
-        },
-        input: {
-            padding: '10px 14px',
-            fontSize: '16px',
-        },
-        button: {
-            padding: '12px 16px',
-            fontSize: '14px',
-        },
-    },
-    '@media (max-width: 480px)': {
-        card: {
-            padding: '16px',
-            borderRadius: '16px',
-        },
-        title: {
-            fontSize: '18px',
-        },
-        subtitle: {
-            fontSize: '13px',
-        },
-    },
-};
 
 export default LiveLobby

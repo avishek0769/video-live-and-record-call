@@ -25,52 +25,56 @@ function App() {
   }, [currentCategory])
 
   return (
-    <div style={styles.container}>
+    <div className="min-h-screen bg-gray-950 text-white font-sans">
       {
         hide ? (
           <>
             {/* Header for both sections */}
-            <header style={styles.globalHeader}>
-              <div style={styles.logo}>
-                <div style={styles.logoIcon}>📹</div>
-                <h1 style={styles.logoText}>VideoChat</h1>
+            <header className="px-6 py-4 md:px-6 md:py-4 border-b border-gray-700 bg-black/30 backdrop-blur-lg sticky top-0 z-50">
+              <div className="flex items-center gap-3 md:gap-3 justify-center md:justify-start">
+                <div className="text-2xl md:text-3xl drop-shadow-lg">📹</div>
+                <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
+                  VideoChat
+                </h1>
               </div>
             </header>
 
-            <div style={styles.splitContainer}>
+            <div className="flex flex-col md:flex-row min-h-[calc(100vh-80px)]">
               {/* Left Side - Navigation */}
-              <div style={styles.leftPanel}>
-                <main style={styles.main}>
-                  <div style={styles.content}>
-                    <h2 style={styles.title}>
+              <div className="w-full md:w-1/2 min-h-[30vh] md:min-h-auto bg-gradient-to-br from-gray-950 to-gray-950 flex flex-col order-1">
+                <main className="flex items-center justify-center flex-1 p-4 md:p-5">
+                  <div className="text-center max-w-md w-full px-2 md:px-0">
+                    <h2 className="text-xl md:text-3xl font-extrabold mb-2 md:mb-3 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent leading-tight">
                       {currentCategory === "record" ? "🎥 Recording Mode" : "🔴 Live Mode"}
                     </h2>
-                    <p style={styles.subtitle}>
+                    <p className="text-xs md:text-sm text-gray-400 mb-4 md:mb-8 leading-relaxed">
                       {currentCategory === "record" 
                         ? "Create and save video recordings" 
                         : "Start live video conversations"
                       }
                     </p>
                     
-                    <div style={styles.buttonContainer}>
+                    <div className="flex flex-row md:flex-col gap-3 md:gap-4">
                       <button 
                         onClick={() => setcurrentCategory("live")} 
-                        style={{
-                          ...styles.button,
-                          ...(currentCategory === "live" ? styles.buttonActive : styles.buttonInactive)
-                        }}
+                        className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 border-2 border-transparent rounded-xl text-sm md:text-base font-semibold cursor-pointer transition-all duration-300 justify-center relative overflow-hidden flex-1 md:flex-none min-w-[120px] md:min-w-0 md:w-auto ${
+                          currentCategory === "live" 
+                            ? "bg-gradient-to-r from-red-400 to-teal-400 text-white transform-none md:-translate-y-0.5 shadow-lg shadow-red-400/30" 
+                            : "bg-white/5 text-gray-300 border-white/10"
+                        }`}
                       >
-                        <span style={styles.buttonIcon}>🔴</span>
+                        <span className="text-sm md:text-base drop-shadow-sm">🔴</span>
                         Live Chat
                       </button>
                       <button 
                         onClick={() => setcurrentCategory("record")} 
-                        style={{
-                          ...styles.button,
-                          ...(currentCategory === "record" ? styles.buttonActive : styles.buttonInactive)
-                        }}
+                        className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 border-2 border-transparent rounded-xl text-sm md:text-base font-semibold cursor-pointer transition-all duration-300 justify-center relative overflow-hidden flex-1 md:flex-none min-w-[120px] md:min-w-0 md:w-auto ${
+                          currentCategory === "record" 
+                            ? "bg-gradient-to-r from-red-400 to-teal-400 text-white transform-none md:-translate-y-0.5 shadow-lg shadow-red-400/30" 
+                            : "bg-white/5 text-gray-300 border-white/10"
+                        }`}
                       >
-                        <span style={styles.buttonIcon}>🎥</span>
+                        <span className="text-sm md:text-base drop-shadow-sm">🎥</span>
                         Record
                       </button>
                     </div>
@@ -79,7 +83,7 @@ function App() {
               </div>
 
               {/* Right Side - Outlet */}
-              <div style={styles.rightPanel}>
+              <div className="w-full md:w-1/2 min-h-[70vh] md:min-h-auto bg-gray-950 order-2">
                 <Outlet />
               </div>
             </div>
@@ -90,194 +94,6 @@ function App() {
       }
     </div>
   )
-}
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    backgroundColor: '#0f0f0f',
-    color: '#ffffff',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  globalHeader: {
-    padding: '16px 24px',
-    borderBottom: '1px solid #333',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    backdropFilter: 'blur(10px)',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-  },
-  splitContainer: {
-    display: 'flex',
-    minHeight: 'calc(100vh - 80px)',
-    flexDirection: 'row',
-    '@media (max-width: 768px)': {
-      flexDirection: 'column',
-      minHeight: '100vh',
-    },
-  },
-  leftPanel: {
-    width: '50%',
-    background: 'linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%)',
-    display: 'flex',
-    flexDirection: 'column',
-    '@media (max-width: 768px)': {
-      width: '100%',
-      minHeight: '40vh',
-      order: 1,
-    },
-  },
-  rightPanel: {
-    width: '50%',
-    backgroundColor: '#0f0f0f',
-    '@media (max-width: 768px)': {
-      width: '100%',
-      minHeight: '60vh',
-      order: 2,
-    },
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    justifyContent: 'left',
-    '@media (max-width: 768px)': {
-      gap: '8px',
-      justifyContent: 'center',
-    },
-  },
-  logoIcon: {
-    fontSize: '28px',
-    filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.3))',
-    '@media (max-width: 768px)': {
-      fontSize: '24px',
-    },
-  },
-  logoText: {
-    margin: 0,
-    fontSize: '24px',
-    fontWeight: '700',
-    background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
-    '@media (max-width: 768px)': {
-      fontSize: '20px',
-    },
-  },
-  main: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    padding: '20px',
-    '@media (max-width: 768px)': {
-      padding: '12px 16px',
-    },
-  },
-  content: {
-    textAlign: 'center',
-    maxWidth: '400px',
-    width: '100%',
-    '@media (max-width: 768px)': {
-      maxWidth: '100%',
-      padding: '0',
-    },
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '800',
-    margin: '0 0 12px 0',
-    background: 'linear-gradient(45deg, #ffffff, #cccccc)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
-    lineHeight: '1.2',
-    '@media (max-width: 768px)': {
-      fontSize: '22px',
-      margin: '0 0 8px 0',
-    },
-    '@media (max-width: 480px)': {
-      fontSize: '20px',
-    },
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#888',
-    margin: '0 0 32px 0',
-    lineHeight: '1.5',
-    '@media (max-width: 768px)': {
-      fontSize: '13px',
-      margin: '0 0 20px 0',
-    },
-    '@media (max-width: 480px)': {
-      fontSize: '12px',
-      margin: '0 0 16px 0',
-    },
-  },
-  buttonContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    justifyContent: 'center',
-    '@media (max-width: 768px)': {
-      flexDirection: 'row',
-      gap: '12px',
-    },
-    '@media (max-width: 480px)': {
-      flexDirection: 'column',
-      gap: '10px',
-    },
-  },
-  button: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '12px 24px',
-    border: '2px solid transparent',
-    borderRadius: '12px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    '@media (max-width: 768px)': {
-      padding: '8px 16px',
-      fontSize: '14px',
-      flex: 1,
-      minWidth: '120px',
-    },
-    '@media (max-width: 480px)': {
-      padding: '10px 20px',
-      fontSize: '14px',
-      width: '100%',
-    },
-  },
-  buttonActive: {
-    background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
-    color: '#ffffff',
-    transform: 'translateY(-1px)',
-    boxShadow: '0 4px 16px rgba(255, 107, 107, 0.3)',
-    '@media (max-width: 768px)': {
-      transform: 'none',
-      boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)',
-    },
-  },
-  buttonInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: '#cccccc',
-    border: '2px solid rgba(255, 255, 255, 0.1)',
-  },
-  buttonIcon: {
-    fontSize: '16px',
-    filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.3))',
-    '@media (max-width: 768px)': {
-      fontSize: '14px',
-    },
-  },
 }
 
 export default App
