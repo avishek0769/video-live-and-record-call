@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from 'react'
 import ReactPlayer from "react-player"
-import { useNavigate } from 'react-router-dom'
+import { parsePath, useNavigate } from 'react-router-dom'
 import peer from '../../service/PeerService'
 import { SocketContext } from '../../context/SocketProvider'
 
@@ -16,34 +16,40 @@ function LiveRoom() {
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
-        console.log(`User with this socket ID, ${socketId} just joined !`)
+        // console.log(`User with this socket ID, ${socketId} just joined !`)
         socket.emit("user-joined-confirm:server", { user2Id: socketId, socketId: socket.id })
     }, [setRemoteSocketId])
 
     const handleUserJoinedConfirm = useCallback((socketId) => {
         setRemoteSocketId(socketId)
-        console.log(`User with this socket ID, ${socketId} was waiting !`)
+        // console.log(`User with this socket ID, ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
     const handleCall = useCallback(async () => {
         setCalled(true)
         const offer = await peer.getOffer()
-        console.log("Remote Socket id -->", remoteSocketId)
+        // console.log("Remote Socket id -->", remoteSocketId)
         // socket.emit("call-user", { to: remoteSocketId, offer }) // Sending the offer immediately after creating it - !
         console.log("Offer --> ", offer);
     }, [socket, remoteSocketId, setCalled, myStream]);
 
     const handleIncomingCall = useCallback(async ({ from, offer }) => {
-        console.log(`Getting an incoming call....`)
+        console.log("Getting an incoming call....")
+        console.log("Signaling state before setting answer:", peer.peer.signalingState);
+
         const answer = await peer.getAnswer(offer)
-        socket.emit("call-accepted", { to: from, answer }) // Sending the answer immediately after creating it - !
+        // socket.emit("call-accepted", { to: from, answer }) // Sending the answer immediately after creating it - !
         console.log("Call Accepted with - Answer --> ", answer);
 
         setNoOfOffers(prev => ++prev)
     }, [socket])
 
     const handleCallAcceptedConfirm = useCallback(async ({ answer, from }) => {
-        await peer.setRemoteDescription(answer)
+        console.log("Signaling state before setting answer:", peer.peer.signalingState);
+
+        if(!peer.peer.remoteDescription){
+            await peer.setRemoteDescription(answer)
+        }
         console.log("Confirm Answer --> ", answer);
 
         if (myStream && peer.peer.getSenders().length === 0) {
@@ -56,7 +62,7 @@ function LiveRoom() {
     }, [myStream])
 
     const handleNegoNeeded = useCallback(async () => {
-        console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
+        // console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
         const offer = await peer.getOffer();
         socket.emit("peer-nego-needed", { offer, to: remoteSocketId }); // Nego --> Sending the offer immediately after creating it - !
     }, [remoteSocketId, socket]);
@@ -70,22 +76,33 @@ function LiveRoom() {
 
     const handleNegoNeedFinal = useCallback(async ({ ans }) => {
         console.log("Nego Final --> ", ans);
-        await peer.setRemoteDescription(ans);
+        if(!peer.peer.remoteDescription){
+            await peer.setRemoteDescription(answer)
+        }
         setNoOfOffers(prev => ++prev)
     }, [myStream]);
 
     useEffect(() => {
-        console.log("USE EFFECT-->", remoteSocketId);
+        // console.log("USE EFFECT-->", remoteSocketId);
         if (remoteSocketId) {
             peer.peer.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log("New ICE candidate:", event.candidate);
+                    console.log("New ICE candidate:", event.candidate.candidate);
                     console.log(peer.peer.localDescription);
                 }
                 else {
-                    socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
+                    if(called){
+                        socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
+                    }
+                    else {
+                        socket.emit("call-accepted", { to: remoteSocketId, answer: peer.peer.localDescription })
+                    }
                     console.log("All ICE candidates have been sent.", event.candidate);
                 }
+            };
+
+            peer.peer.oniceconnectionstatechange = () => {
+                console.log('ICE State:', peer.peer.iceConnectionState);
             };
 
             peer.peer.addEventListener("negotiationneeded", () => {
@@ -125,7 +142,7 @@ function LiveRoom() {
             .then((stream) => {
                 setMyStream(stream)
             })
-        console.log("Now-->", socket.id);
+        // console.log("Now-->", socket.id);
     }, [setMyStream])
 
     useEffect(() => {
