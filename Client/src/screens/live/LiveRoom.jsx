@@ -62,43 +62,57 @@ function LiveRoom() {
         setNoOfOffers(prev => ++prev)
     }, [myStream])
 
-    const handleNegoNeeded = useCallback(async () => {
-        // console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
-        const offer = await peer.getOffer();
-        socket.emit("peer-nego-needed", { offer, to: remoteSocketId }); // Nego --> Sending the offer immediately after creating it - !
-    }, [remoteSocketId, socket]);
+    const handleCallEnd = useCallback(() => {
+        peer.peer.close()
+        myStream.getTracks().forEach(track => track.stop())
+        setMyStream(null)
+        setRemoteStream(null)
+        setRemoteSocketId(null)
+        setIsConnected(null)
+        setCalled(false)
+        navigate("/live")
+    }, [peer, myStream, setMyStream, setRemoteStream, setRemoteSocketId, setIsConnected, setCalled]);
 
-    const handleNegoNeedIncomming = useCallback(async ({ from, offer }) => {
-        console.log("Incoming Nego --> ", offer);
-        const ans = await peer.getAnswer(offer); // Nego --> Sending the answer immediately after creating it - !
-        socket.emit("peer-nego-done", { to: from, ans });
-        setNoOfOffers(prev => ++prev)
-    }, [socket]);
+    // const handleNegoNeeded = useCallback(async () => {
+    //     // console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
+    //     const offer = await peer.getOffer();
+    //     socket.emit("peer-nego-needed", { offer, to: remoteSocketId }); // Nego --> Sending the offer immediately after creating it - !
+    // }, [remoteSocketId, socket]);
 
-    const handleNegoNeedFinal = useCallback(async ({ ans }) => {
-        console.log("Nego Final --> ", ans);
-        if (!peer.peer.remoteDescription) {
-            await peer.setRemoteDescription(answer)
-        }
-        setNoOfOffers(prev => ++prev)
-    }, [myStream]);
+    // const handleNegoNeedIncomming = useCallback(async ({ from, offer }) => {
+    //     console.log("Incoming Nego --> ", offer);
+    //     const ans = await peer.getAnswer(offer); // Nego --> Sending the answer immediately after creating it - !
+    //     socket.emit("peer-nego-done", { to: from, ans });
+    //     setNoOfOffers(prev => ++prev)
+    // }, [socket]);
+
+    // const handleNegoNeedFinal = useCallback(async ({ ans }) => {
+    //     console.log("Nego Final --> ", ans);
+    //     if (!peer.peer.remoteDescription) {
+    //         await peer.setRemoteDescription(answer)
+    //     }
+    //     setNoOfOffers(prev => ++prev)
+    // }, [myStream]);
 
     useEffect(() => {
         // console.log("USE EFFECT-->", remoteSocketId);
         if (remoteSocketId) {
             peer.peer.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log("New ICE candidate:", event.candidate.candidate);
+                    console.log("New ICE candidate: ", peer.peer.iceGatheringState, event.candidate.candidate);
                     console.log(peer.peer.localDescription);
                 }
                 else {
-                    if (called) {
-                        socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
+                    console.log("ICE Gathering State: ", peer.peer.iceGatheringState)
+                    if(peer.peer.iceGatheringState == "complete"){
+                        if (called) {
+                            socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
+                        }
+                        else {
+                            socket.emit("call-accepted", { to: remoteSocketId, answer: peer.peer.localDescription })
+                        }
+                        console.log("All ICE candidates have been sent.", event.candidate);
                     }
-                    else {
-                        socket.emit("call-accepted", { to: remoteSocketId, answer: peer.peer.localDescription })
-                    }
-                    console.log("All ICE candidates have been sent.", event.candidate);
                 }
             };
 
@@ -106,6 +120,9 @@ function LiveRoom() {
                 if (peer.peer.connectionState === 'connected') {
                     setIsConnected(true);
                 }
+                // else if (peer.peer.connectionState === 'failed') {
+                //     setIsConnected(undefined); // Connection failed
+                // }
                 else {
                     setIsConnected(false);
                 }
@@ -115,6 +132,9 @@ function LiveRoom() {
                 if (peer.peer.iceConnectionState === 'connected') {
                     setIsConnected(true);
                 }
+                // else if (peer.peer.iceConnectionState === 'failed') {
+                //     setIsConnected(undefined); // Connection failed
+                // }
                 else {
                     setIsConnected(false);
                 }
@@ -123,7 +143,7 @@ function LiveRoom() {
 
             peer.peer.addEventListener("negotiationneeded", () => {
                 console.log("NEGOTIATION NEEDED");
-                handleNegoNeeded()
+                // handleNegoNeeded()
             })
 
             peer.peer.addEventListener("track", (ev) => {
@@ -159,16 +179,16 @@ function LiveRoom() {
         socket.on("user-joined-confirm:client", handleUserJoinedConfirm)
         socket.on("incoming-call", handleIncomingCall)
         socket.on("call-accepted-confirm", handleCallAcceptedConfirm)
-        socket.on("peer-nego-incoming", handleNegoNeedIncomming);
-        socket.on("peer-nego-final", handleNegoNeedFinal);
+        // socket.on("peer-nego-incoming", handleNegoNeedIncomming);
+        // socket.on("peer-nego-final", handleNegoNeedFinal);
 
         return () => {
             socket.off("user-joined", handleUserJoined)
             socket.off("user-joined-confirm:client", handleUserJoinedConfirm)
             socket.off("incoming-call", handleIncomingCall)
             socket.off("call-accepted-confirm", handleCallAcceptedConfirm)
-            socket.off("peer-nego-incoming", handleNegoNeedIncomming);
-            socket.off("peer-nego-final", handleNegoNeedFinal);
+            // socket.off("peer-nego-incoming", handleNegoNeedIncomming);
+            // socket.off("peer-nego-final", handleNegoNeedFinal);
         }
     }, [socket, handleUserJoined, handleUserJoinedConfirm, handleIncomingCall, handleCallAcceptedConfirm])
 
@@ -196,6 +216,11 @@ function LiveRoom() {
                             <>
                                 <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
                                 <span className="text-yellow-400 text-sm font-medium">Connecting...</span>
+                            </>
+                        ) : isConnected === undefined ? (
+                            <>
+                                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                                <span className="text-red-400 text-sm font-medium">Failed</span>
                             </>
                         ) : (
                             <>
@@ -273,11 +298,11 @@ function LiveRoom() {
 
             {/* Control Panel */}
             <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
-                <div className="p-4 md:p-6">
+                <div className="px-4 py-2 md:px-6 md:py-3 flex justify-center items-center gap-4">
                     {/* Status Message */}
                     {isConnected === null && (
-                        <div className="text-center mb-4">
-                            <p className="text-gray-300 text-sm md:text-base">
+                        <div className="text-center mb-2">
+                            <p className="text-gray-300 text-sm md:text-sm">
                                 {remoteSocketId
                                     ? "✅ Participant joined! Ready to start call..."
                                     : "⏳ Waiting for participant to join..."
@@ -287,14 +312,14 @@ function LiveRoom() {
                     )}
 
                     {/* Control Buttons */}
-                    <div className="flex items-center justify-center gap-3 md:gap-4">
+                    <div className="flex items-center justify-center gap-2 md:gap-3">
                         {/* Call Button */}
                         {isConnected === null && remoteSocketId && (
                             <button
                                 onClick={handleCall}
-                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105"
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
                             >
-                                <span className="text-lg">📞</span>
+                                <span className="text-sm md:text-lg">📞</span>
                                 <span className="hidden md:inline">Start Call</span>
                             </button>
                         )}
@@ -302,10 +327,10 @@ function LiveRoom() {
                         {/* End Call Button */}
                         {remoteSocketId && (
                             <button
-                                onClick={() => navigate("/live")}
-                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105"
+                                onClick={handleCallEnd}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
                             >
-                                <span className="text-lg">📞</span>
+                                <span className="text-sm md:text-lg">📞</span>
                                 <span className="hidden md:inline">End Call</span>
                             </button>
                         )}
@@ -313,10 +338,10 @@ function LiveRoom() {
                         {/* Back Button */}
                         {!remoteSocketId && (
                             <button
-                                onClick={() => navigate("/live")}
-                                className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-xl transition-all duration-300 hover:bg-white/20"
+                                onClick={handleCallEnd}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-lg md:rounded-xl transition-all duration-300 hover:bg-white/20 text-sm md:text-base"
                             >
-                                <span className="text-lg">←</span>
+                                <span className="text-sm md:text-lg">←</span>
                                 <span className="hidden md:inline">Back to Home</span>
                             </button>
                         )}
@@ -324,7 +349,7 @@ function LiveRoom() {
 
                     {/* Connection Status Text */}
                     {isConnected === true && (
-                        <div className="text-center mt-3">
+                        <div className="text-center mt-1">
                             <p className="text-green-400 text-sm font-medium">
                                 🎉 Call connected successfully!
                             </p>
@@ -332,12 +357,20 @@ function LiveRoom() {
                     )}
 
                     {isConnected === false && (
-                        <div className="text-center mt-3">
+                        <div className="text-center mt-1">
                             <p className="text-yellow-400 text-sm font-medium">
-                                🔄 Establishing connection, this may take a while...
+                                🔄 Establishing connection... this may take a minute.
                             </p>
                         </div>
                     )}
+
+                    {/* {isConnected === undefined && (
+                        <div className="text-center mt-1">
+                            <p className="text-red-400 text-sm font-medium">
+                                ❌ Connection failed! Please try again.
+                            </p>
+                        </div>
+                    )} */}
                 </div>
             </div>
         </div>
