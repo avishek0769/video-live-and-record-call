@@ -91,6 +91,11 @@ io.on("connection", (socket) => {
     socket.on("connection-success", (to) => {
         io.to(to).emit("connection-success");
     })
+
+    socket.on("call-ended", ({ to }) => {
+        console.log(`Call ended by ${socket.id} for ${to}`)
+        io.to(to).emit("user-left", { from: socket.id })
+    })
 })
 
 let iceServers = [

@@ -8,7 +8,6 @@ function LiveLobby() {
     const navigate = useNavigate()
 
     const handleJoin = useCallback(()=>{
-        console.log("JOI")
         socket.emit("join-user", { roomId })
         navigate("/live/room")
     }, [roomId, socket, navigate])

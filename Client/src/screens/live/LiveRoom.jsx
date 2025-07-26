@@ -11,18 +11,19 @@ function LiveRoom() {
     const [isConnected, setIsConnected] = useState(null)
     const [remoteStream, setRemoteStream] = useState()
     const [remoteSocketId, setRemoteSocketId] = useState(null)
+    const [showUserLeftPopup, setShowUserLeftPopup] = useState(false)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
-        // console.log(`User with this socket ID, ${socketId} just joined !`)
+        console.log(`User ${socketId} joined !`)
         socket.emit("user-joined-confirm:server", { user2Id: socketId, socketId: socket.id })
     }, [setRemoteSocketId])
 
     const handleUserJoinedConfirm = useCallback((socketId) => {
         setRemoteSocketId(socketId)
-        // console.log(`User with this socket ID, ${socketId} was waiting !`)
+        console.log(`User ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
     const handleCall = useCallback(async () => {
@@ -63,6 +64,7 @@ function LiveRoom() {
     }, [myStream])
 
     const handleCallEnd = useCallback(() => {
+        socket.emit("call-ended", { to: remoteSocketId })
         peer.peer.close()
         myStream.getTracks().forEach(track => track.stop())
         setMyStream(null)
@@ -71,7 +73,21 @@ function LiveRoom() {
         setIsConnected(null)
         setCalled(false)
         navigate("/live")
-    }, [peer, myStream, setMyStream, setRemoteStream, setRemoteSocketId, setIsConnected, setCalled]);
+    }, [peer, myStream, setMyStream, setRemoteStream, setRemoteSocketId, setIsConnected, setCalled, remoteSocketId]);
+
+    const handleUserLeft = useCallback(() => {
+        console.log("User left the call");
+        setRemoteStream(null)
+        setRemoteSocketId(null)
+        setIsConnected(null)
+        setCalled(false)
+        setShowUserLeftPopup(true)
+        
+        // Auto-hide popup after 3 seconds
+        setTimeout(() => {
+            setShowUserLeftPopup(false)
+        }, 3000)
+    }, [])
 
     // const handleNegoNeeded = useCallback(async () => {
     //     // console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
@@ -175,10 +191,19 @@ function LiveRoom() {
     }, [setMyStream])
 
     useEffect(() => {
+        console.log(isConnected, remoteSocketId);
+        if(isConnected === null && remoteSocketId){
+            console.log("Can call")
+            setTimeout(handleCall, 2000)
+        }
+    }, [isConnected, remoteSocketId])
+
+    useEffect(() => {
         socket.on("user-joined", handleUserJoined)
         socket.on("user-joined-confirm:client", handleUserJoinedConfirm)
         socket.on("incoming-call", handleIncomingCall)
         socket.on("call-accepted-confirm", handleCallAcceptedConfirm)
+        socket.on("user-left", handleUserLeft)
         // socket.on("peer-nego-incoming", handleNegoNeedIncomming);
         // socket.on("peer-nego-final", handleNegoNeedFinal);
 
@@ -187,6 +212,7 @@ function LiveRoom() {
             socket.off("user-joined-confirm:client", handleUserJoinedConfirm)
             socket.off("incoming-call", handleIncomingCall)
             socket.off("call-accepted-confirm", handleCallAcceptedConfirm)
+            socket.off("user-left", handleUserLeft)
             // socket.off("peer-nego-incoming", handleNegoNeedIncomming);
             // socket.off("peer-nego-final", handleNegoNeedFinal);
         }
@@ -195,6 +221,27 @@ function LiveRoom() {
 
     return (
         <div className="min-h-screen bg-gray-950 text-white font-sans">
+            {/* User Left Popup */}
+            {showUserLeftPopup && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
+                    <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-red-500/30 rounded-2xl p-6 md:p-8 mx-4 max-w-md w-full text-center shadow-2xl shadow-red-500/20">
+                        <div className="text-4xl md:text-5xl mb-4">👋</div>
+                        <h3 className="text-xl md:text-2xl font-bold text-red-400 mb-2">
+                            User Left
+                        </h3>
+                        <p className="text-gray-300 text-sm md:text-base mb-4">
+                            The other participant has left the call
+                        </p>
+                        <button
+                            onClick={() => setShowUserLeftPopup(false)}
+                            className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium rounded-lg hover:shadow-lg transition-all duration-200"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <header className="px-6 py-4 border-b border-gray-700 bg-black/30 backdrop-blur-lg sticky top-0 z-50">
                 <div className="flex items-center justify-between">
@@ -313,8 +360,8 @@ function LiveRoom() {
 
                     {/* Control Buttons */}
                     <div className="flex items-center justify-center gap-2 md:gap-3">
-                        {/* Call Button */}
-                        {isConnected === null && remoteSocketId && (
+                        {/* Start Call Button */}
+                        {/* {remoteSocketId && (
                             <button
                                 onClick={handleCall}
                                 className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
@@ -322,7 +369,7 @@ function LiveRoom() {
                                 <span className="text-sm md:text-lg">📞</span>
                                 <span className="hidden md:inline">Start Call</span>
                             </button>
-                        )}
+                        )} */}
 
                         {/* End Call Button */}
                         {remoteSocketId && (
