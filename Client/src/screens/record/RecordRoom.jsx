@@ -7,8 +7,12 @@ function RecordRoom() {
     const [myStream, setMySetstream] = useState()
     const [state, setState] = useState(null)
     const [remoteSocketId, setRemoteSocketId] = useState(null)
+    const [recordingDuration, setRecordingDuration] = useState(0)
+    const [cooldownTime, setCooldownTime] = useState(0)
     const videoRef = useRef(null)
     const nextUserRef = useRef(null)
+    const recordingTimerRef = useRef(null)
+    const cooldownTimerRef = useRef(null)
     const socket = useContext(SocketContext)
     const { roomId } = useParams()
     const navigate = useNavigate()
@@ -26,6 +30,13 @@ function RecordRoom() {
 
     const handleCall = useCallback(() => {
         setState("recording")
+        setRecordingDuration(0)
+        
+        // Start recording timer
+        recordingTimerRef.current = setInterval(() => {
+            setRecordingDuration(prev => prev + 1)
+        }, 1000)
+
         mediaRecorderRef.current = new MediaRecorder(myStream, {
             mimeType: 'video/webm; codecs="vp8,opus"',
             audioBitsPerSecond: 128000,
@@ -73,15 +84,42 @@ function RecordRoom() {
     const handleStopRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop()
+            
+            // Clear recording timer
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current)
+                recordingTimerRef.current = null
+            }
+
             setState("sent")
-            // Reset state after 2 seconds to allow new recording
-            setTimeout(() => {
-                setState(undefined)
-            }, 2000)
+            
+            // Start cooldown timer with the recorded duration
+            setCooldownTime(recordingDuration + 1)
+            cooldownTimerRef.current = setInterval(() => {
+                setCooldownTime(prev => {
+                    if (prev <= 0) {
+                        clearInterval(cooldownTimerRef.current)
+                        cooldownTimerRef.current = null
+                        setState(null)
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
         }
-    }, []);
+    }, [recordingDuration]);
 
     const handleEndCall = useCallback(() => {
+        // Clear all timers
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current)
+            recordingTimerRef.current = null
+        }
+        if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current)
+            cooldownTimerRef.current = null
+        }
+
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop()
         }
@@ -91,8 +129,29 @@ function RecordRoom() {
         setMySetstream(null)
         setRemoteSocketId(null)
         setState(null)
+        setRecordingDuration(0)
+        setCooldownTime(0)
         navigate("/record")
     }, [myStream, navigate]);
+
+    // Cleanup timers on unmount
+    useEffect(() => {
+        return () => {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current)
+            }
+            if (cooldownTimerRef.current) {
+                clearInterval(cooldownTimerRef.current)
+            }
+        }
+    }, [])
+
+    // Format time helper
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
 
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -180,11 +239,12 @@ function RecordRoom() {
                                 <span className="text-white text-sm font-medium">You</span>
                             </div>
 
-                            {/* Recording Indicator */}
+                            {/* Recording Indicator with Timer */}
                             {state === "recording" && (
                                 <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/20 backdrop-blur-sm px-3 py-1 rounded-lg border border-red-500/30">
                                     <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
                                     <span className="text-red-400 text-sm font-medium">REC</span>
+                                    <span className="text-red-400 text-sm font-medium">{formatTime(recordingDuration)}</span>
                                 </div>
                             )}
                         </div>
@@ -238,7 +298,7 @@ function RecordRoom() {
                             ) : (remoteSocketId && state === "recording") ? (
                                 "🔴 Recording in progress..."
                             ) : (remoteSocketId && state === "sent") ? (
-                                "🎉 Recording sent successfully!"
+                                `🎉 Recording sent! Cooldown: ${formatTime(cooldownTime)}`
                             ) : (remoteSocketId && state === null) ?(
                                 "✅ Participant joined! Ready to send recordings..."
                             ) : null}
@@ -247,14 +307,21 @@ function RecordRoom() {
 
                     {/* Control Buttons */}
                     <div className="flex items-center justify-center gap-2 md:gap-3">
-                        {/* Start Recording Button - Always show when connected and not recording */}
+                        {/* Start Recording Button - with cooldown */}
                         {remoteSocketId && state !== "recording" && (
                             <button
                                 onClick={handleCall}
-                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
+                                disabled={cooldownTime > 0}
+                                className={`flex items-center gap-1 px-4 py-2 md:px-6 font-semibold rounded-lg md:rounded-xl shadow-lg transition-all duration-300 text-sm md:text-base ${
+                                    cooldownTime > 0 
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-gray-600/30' 
+                                        : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-blue-500/30 hover:shadow-blue-500/40 hover:scale-105'
+                                }`}
                             >
                                 <span className="text-sm md:text-lg">🎥</span>
-                                <span className="hidden md:inline"> Start Recording </span>
+                                <span className="hidden md:inline">
+                                    {cooldownTime > 0 ? `Wait ${formatTime(cooldownTime)}` : 'Start Recording'}
+                                </span>
                             </button>
                         )}
 
@@ -291,17 +358,6 @@ function RecordRoom() {
                             </button>
                         )}
                     </div>
-
-                    {/* Recording Status */}
-                    {/* {state && (
-                        <div className="text-center mt-1">
-                            <p className={`text-xs md:text-sm font-medium ${
-                                state === "recording" ? "text-red-400" : "text-green-400"
-                            }`}>
-                                {state === "recording" ? "🔴 recording" : "🎉 Recording completed!"}
-                            </p>
-                        </div>
-                    )} */}
                 </div>
             </div>
         </div>
