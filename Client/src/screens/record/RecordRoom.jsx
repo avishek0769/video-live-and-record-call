@@ -1,17 +1,17 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { SocketContext } from '../../context/SocketProvider';
-import { useParams } from 'react-router-dom';
-
+import { useParams, useNavigate } from 'react-router-dom';
 
 function RecordRoom() {
     const mediaRecorderRef = useRef(null);
     const [myStream, setMySetstream] = useState()
-    const [state, setState] = useState()
+    const [state, setState] = useState(null)
     const [remoteSocketId, setRemoteSocketId] = useState(null)
     const videoRef = useRef(null)
     const nextUserRef = useRef(null)
     const socket = useContext(SocketContext)
     const { roomId } = useParams()
+    const navigate = useNavigate()
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
@@ -25,7 +25,7 @@ function RecordRoom() {
     }, [])
 
     const handleCall = useCallback(() => {
-        setState("Recording...")
+        setState("recording")
         mediaRecorderRef.current = new MediaRecorder(myStream, {
             mimeType: 'video/webm; codecs="vp8,opus"',
             audioBitsPerSecond: 128000,
@@ -70,6 +70,30 @@ function RecordRoom() {
         }
     }, []);
 
+    const handleStopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop()
+            setState("sent")
+            // Reset state after 2 seconds to allow new recording
+            setTimeout(() => {
+                setState(undefined)
+            }, 2000)
+        }
+    }, []);
+
+    const handleEndCall = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop()
+        }
+        if (myStream) {
+            myStream.getTracks().forEach(track => track.stop())
+        }
+        setMySetstream(null)
+        setRemoteSocketId(null)
+        setState(null)
+        navigate("/record")
+    }, [myStream, navigate]);
+
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then((stream) => {
@@ -93,48 +117,195 @@ function RecordRoom() {
         }
     }, [socket, handleUserJoined, handleUserJoinedConfirm, handleReceivingStream])
 
-
     return (
-        <>
-            <div style={styles.container}>
-                <video ref={videoRef} height={350} muted autoPlay style={styles.myVideo} playsInline > </video>
-                <video ref={nextUserRef} width={400} height={350} autoPlay playsInline> </video>
+        <div className="min-h-screen bg-gray-950 text-white font-sans">
+            {/* Header */}
+            <header className="px-6 py-4 border-b border-gray-700 bg-black/30 backdrop-blur-lg sticky top-0 z-50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="text-2xl drop-shadow-lg">🎥</div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
+                            Recording Session
+                        </h1>
+                    </div>
+
+                    {/* Connection Status */}
+                    <div className="flex items-center gap-2">
+                        {state === "recording" ? (
+                            <>
+                                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                                <span className="text-red-400 text-sm font-medium">Recording</span>
+                            </>
+                        ) : state === "sent" ? (
+                            <>
+                                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                <span className="text-green-400 text-sm font-medium">Sent</span>
+                            </>
+                        ) : remoteSocketId ? (
+                            <>
+                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-green-400 text-sm font-medium">Connected</span>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                                <span className="text-gray-400 text-sm font-medium">Waiting</span>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </header>
+
+            {/* Video Container */}
+            <div className="flex-1 p-4 md:p-6">
+                <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-4 md:gap-6">
+                    {/* My Video */}
+                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                        <div className="h-full w-full relative flex items-center justify-center">
+                            <video 
+                                ref={videoRef} 
+                                muted 
+                                autoPlay 
+                                playsInline
+                                className="w-full h-full object-contain"
+                                style={{
+                                    aspectRatio: 'auto',
+                                    objectFit: 'contain',
+                                    objectPosition: 'center'
+                                }}
+                            />
+                            
+                            {/* Video Label */}
+                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                <span className="text-white text-sm font-medium">You</span>
+                            </div>
+
+                            {/* Recording Indicator */}
+                            {state === "recording" && (
+                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/20 backdrop-blur-sm px-3 py-1 rounded-lg border border-red-500/30">
+                                    <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                                    <span className="text-red-400 text-sm font-medium">REC</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Remote Video */}
+                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                        <div className="h-full relative flex items-center justify-center">
+                            <video 
+                                ref={nextUserRef} 
+                                autoPlay 
+                                playsInline
+                                className="w-full h-full object-contain"
+                                style={{
+                                    aspectRatio: 'auto',
+                                    objectFit: 'contain',
+                                    objectPosition: 'center'
+                                }}
+                            />
+                            
+                            {!remoteSocketId && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="text-center">
+                                        <div className="text-6xl md:text-8xl mb-4 opacity-30">👤</div>
+                                        <p className="text-gray-400">Waiting for participant...</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Video Label */}
+                            {remoteSocketId && (
+                                <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                    <span className="text-white text-sm font-medium">Participant</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {remoteSocketId ? <h1>Connected !</h1> : <h1>Waiting for the other user.... </h1>}
-            <div style={{ display: "flex", justifyContent: "center", gap: 20, width: "100%" }}>
-                {remoteSocketId && <button onClick={handleCall} style={styles.callBtn}>Call</button>}
-                {remoteSocketId && <button onClick={() => {
-                    mediaRecorderRef.current.stop()
-                    setState("Sent !")
-                }} style={styles.stopBtn}>Stop</button>}
+            {/* Control Panel */}
+            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
+                <div className="flex justify-center items-center gap-4 px-4 py-2 md:px-6">
+                    {/* Status Message */}
+                    <div className="text-center mb-2">
+                        <p className="text-gray-300 text-sm">
+                            {!remoteSocketId ? "⏳ Waiting for participant to join..." : null}
+
+                            {(remoteSocketId && state === undefined) ? (
+                                "Record again and send"
+                            ) : (remoteSocketId && state === "recording") ? (
+                                "🔴 Recording in progress..."
+                            ) : (remoteSocketId && state === "sent") ? (
+                                "🎉 Recording sent successfully!"
+                            ) : (remoteSocketId && state === null) ?(
+                                "✅ Participant joined! Ready to send recordings..."
+                            ) : null}
+                        </p>
+                    </div>
+
+                    {/* Control Buttons */}
+                    <div className="flex items-center justify-center gap-2 md:gap-3">
+                        {/* Start Recording Button - Always show when connected and not recording */}
+                        {remoteSocketId && state !== "recording" && (
+                            <button
+                                onClick={handleCall}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
+                            >
+                                <span className="text-sm md:text-lg">🎥</span>
+                                <span className="hidden md:inline"> Start Recording </span>
+                            </button>
+                        )}
+
+                        {/* Stop Recording Button */}
+                        {state === "recording" && (
+                            <button
+                                onClick={handleStopRecording}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-gray-600/30 hover:shadow-gray-600/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
+                            >
+                                <span className="text-sm md:text-lg">⏹️</span>
+                                <span className="hidden md:inline">Stop Recording</span>
+                            </button>
+                        )}
+
+                        {/* End Session Button */}
+                        {remoteSocketId && (
+                            <button
+                                onClick={handleEndCall}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
+                            >
+                                <span className="text-sm md:text-lg">📞</span>
+                                <span className="hidden md:inline">End Session</span>
+                            </button>
+                        )}
+
+                        {/* Back Button */}
+                        {!remoteSocketId && (
+                            <button
+                                onClick={handleEndCall}
+                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-lg md:rounded-xl transition-all duration-300 hover:bg-white/20 text-sm md:text-base"
+                            >
+                                <span className="text-sm md:text-lg">←</span>
+                                <span className="hidden md:inline">Back to Home</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Recording Status */}
+                    {/* {state && (
+                        <div className="text-center mt-1">
+                            <p className={`text-xs md:text-sm font-medium ${
+                                state === "recording" ? "text-red-400" : "text-green-400"
+                            }`}>
+                                {state === "recording" ? "🔴 recording" : "🎉 Recording completed!"}
+                            </p>
+                        </div>
+                    )} */}
+                </div>
             </div>
-            <h2>{state}</h2>
-        </>
+        </div>
     )
-}
-
-const styles = {
-    callBtn: {
-        padding: '10px 20%',
-        backgroundColor: '#4CAF50',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '16px',
-        margin: '20px 0px'
-    },
-    stopBtn: {
-        padding: '10px 20%',
-        backgroundColor: 'red',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '16px',
-        margin: '20px 0px'
-    },
 }
 
 export default RecordRoom
