@@ -3,15 +3,10 @@ dotenv.config({
 })
 import { Server } from "socket.io"
 import { CLIENT_ADDRESS } from "../constants.js"
-import twilio from "twilio"
 import http from "http"
 import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const client = twilio(accountSid, authToken);
 
 const app = express()
 const server = http.createServer(app)
@@ -19,15 +14,6 @@ const server = http.createServer(app)
 app.use(cors({
     origin: CLIENT_ADDRESS
 }))
-
-let iceServers;
-
-async function createToken() {
-    const token = await client.tokens.create();
-    iceServers = token.iceServers
-
-    console.log(token);
-}
 
 const io = new Server(server, {
     cors: {
@@ -103,13 +89,6 @@ io.on("connection", (socket) => {
         console.log(`Call ended by ${socket.id} for ${to}`)
         io.to(to).emit("user-left", { from: socket.id })
     })
-})
-
-createToken()
-setInterval(createToken, 86000 * 1000);
-
-app.get("/ice-servers", async (req, res) => {
-    res.status(200).json({ iceServers })
 })
 
 server.listen(3000, () => console.log("Server running on PORT ", process.env.PORT))
