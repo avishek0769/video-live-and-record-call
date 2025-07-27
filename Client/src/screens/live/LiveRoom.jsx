@@ -147,6 +147,22 @@ function LiveRoom() {
         })
     }
 
+    const connectRecvTransport = useCallback(() => {
+        socket.emit("consumerTransport-consume", { rtpCapabilities: device.rtpCapabilities }, async ({ params }) => {
+            if(params.error) {
+                console.error(error)
+                return
+            }
+            let newConsumer = await consumerTransport.consume(params)
+
+            const { track } = newConsumer;
+            const stream = new MediaStream([track])
+            setRemoteStream(stream)
+
+            socket.emit("consumer-resume")
+        })
+    }, [consumerTransport])
+
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then((stream) => {
@@ -296,7 +312,8 @@ function LiveRoom() {
                     <button onClick={createDevice}>Create Device</button>
                     <button onClick={createSendTransport}>Create Send Transport</button>
                     <button onClick={connectSendTransport}>Connect Send Transport</button>
-                    <button onClick={createRecvTransport}>Create Receive Transpot</button>
+                    <button onClick={createRecvTransport}>Create Receive Transport</button>
+                    <button onClick={connectRecvTransport}>Connect Receive Transport</button>
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">

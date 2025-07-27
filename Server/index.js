@@ -168,6 +168,47 @@ io.on("connection", async (socket) => {
         console.log("DTLS Params --> ", dtlsParameters)
         await consumerTransport.connect({ dtlsParameters })
     })
+
+    socket.on("consumerTransport-consume", async ({ rtpCapabilities }, cb) => {
+        let canConsume = router.canConsume({ producerId: producer.id, rtpCapabilities });
+
+        try {
+            if (canConsume) {
+                consumer = await consumerTransport.consume({
+                    producerId: producer.id,
+                    rtpCapabilities,
+                    paused: true,
+                })
+                console.log("Consumer --> ", consumer)
+                
+                consumer.on("transportclose", () => {
+                    console.log("Transport Closed")
+                })
+                consumer.on("producerclose", () => {
+                    console.log("Producer Closed")
+                })
+                const params = {
+                    id: consumer.id,
+                    producerId: producer.id,
+                    kind: consumer.kind,
+                    rtpParameters: consumer.rtpParameters,
+                }
+                cb({ params })
+            }
+        }
+        catch (error) {
+            console.log(error.message)
+            callback({
+                params: {
+                    error: error
+                }
+            })
+        }
+    })
+
+    socket.on("consumer-resume", async () => {
+        await consumer.resume()
+    })
 })
 
 server.listen(3000, () => console.log("Server running on PORT ", process.env.PORT))
