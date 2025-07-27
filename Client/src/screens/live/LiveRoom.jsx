@@ -60,7 +60,19 @@ function LiveRoom() {
         })
     }
 
-    
+    // Step-2: Create a Device using the RTP Capabilities
+    const createDevice = useCallback(() => {
+        try {
+            const newDevice = new mediasoupClient.Device()
+            newDevice.load({ routerRtpCapabilities: rtpCapabilities })
+            setDevice(newDevice)
+        }
+        catch (error) {
+            console.log(error)
+            if (error.name === 'UnsupportedError') console.warn('browser not supported');
+        }
+    }, [rtpCapabilities])
+
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then((stream) => {

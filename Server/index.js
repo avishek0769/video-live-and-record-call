@@ -62,8 +62,6 @@ const createWorker = async () => {
 createWorker()
 
 
-
-
 io.on("connection", async (socket) => {
     // RECORD CALLING
 
@@ -106,8 +104,6 @@ io.on("connection", async (socket) => {
         console.log("RtpCapabilities --> ", router.rtpCapabilities)
         cb({ rtpCapabilities: router.rtpCapabilities })
     })
-
-    
 })
 
 server.listen(3000, () => console.log("Server running on PORT ", process.env.PORT))
