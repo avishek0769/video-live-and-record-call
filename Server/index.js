@@ -147,12 +147,12 @@ io.on("connection", async (socket) => {
         else consumerTransport = await createWebRTCTransport(cb);
     })
 
-    socket.on("produceTransport-connect", async ({ dtlsParameters }) => {
+    socket.on("producerTransport-connect", async ({ dtlsParameters }) => {
         console.log("DTLS Params --> ", dtlsParameters)
         await producerTransport.connect({ dtlsParameters })
     })
 
-    socket.on("produceTransport-produce", async ({ kind, rtpParameters }, cb) => {
+    socket.on("producerTransport-produce", async ({ kind, rtpParameters }, cb) => {
         producer = await producerTransport.produce({ kind, rtpParameters })
         console.log("Producer ID: ", producer.id)
 
@@ -162,6 +162,11 @@ io.on("connection", async (socket) => {
         })
 
         cb({ id: producer.id })
+    })
+
+    socket.on("consumerTransport-connect", async ({ dtlsParameters }) => {
+        console.log("DTLS Params --> ", dtlsParameters)
+        await consumerTransport.connect({ dtlsParameters })
     })
 })
 

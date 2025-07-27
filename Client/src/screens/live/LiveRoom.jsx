@@ -83,7 +83,7 @@ function LiveRoom() {
             newProducerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
                 console.log("DTLS Params --> ", dtlsParameters)
                 try {
-                    await socket.emit("produceTransport-connect", { dtlsParameters })
+                    await socket.emit("producerTransport-connect", { dtlsParameters })
                     callback()
                 }
                 catch (error) {
@@ -94,7 +94,7 @@ function LiveRoom() {
             newProducerTransport.on("produce", (parameters, callback, errback) => {
                 console.log("Parameters --> ", parameters)
                 try {
-                    socket.emit("produceTransport-produce", {
+                    socket.emit("producerTransport-produce", {
                         kind: parameters.kind,
                         rtpParameters: parameters.rtpParameters,
                         appData: parameters.appData,
@@ -110,6 +110,7 @@ function LiveRoom() {
         })
     }
 
+    // Create Producer and start sending your video track by connecting to the Producer Transport
     const connectSendTransport = useCallback(async () => {
         let track = myStream.getVideoTracks()[0]
         let newProducer = await producerTransport.produce({ track, params });
@@ -125,6 +126,26 @@ function LiveRoom() {
         setProducer(newProducer)
     }, [producerTransport, myStream])
 
+    const createRecvTransport = () => {
+        socket.emit("createWebRTCTransport", { producer: false }, async ({ params }) => {
+            console.log(params)
+            let newConsumerTransport = await device.createRecvTransport(params)
+
+            newConsumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
+                console.log("DTLS Params --> ", dtlsParameters)
+                try {
+                    socket.emit("consumerTransport-connect", { dtlsParameters })
+                    callback()
+                }
+                catch (error) {
+                    console.log(errback)
+                    errback(errback)
+                }
+            })
+
+            setConsumerTransport(newConsumerTransport)
+        })
+    }
 
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -275,6 +296,7 @@ function LiveRoom() {
                     <button onClick={createDevice}>Create Device</button>
                     <button onClick={createSendTransport}>Create Send Transport</button>
                     <button onClick={connectSendTransport}>Connect Send Transport</button>
+                    <button onClick={createRecvTransport}>Create Receive Transpot</button>
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">
