@@ -7,6 +7,7 @@ import http from "http"
 import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
+import mediasoup from "mediasoup"
 
 const app = express()
 const server = http.createServer(app)
@@ -21,7 +22,49 @@ const io = new Server(server, {
     }
 })
 
-io.on("connection", (socket) => {
+let worker;
+let router;
+let producerTransport;
+let consumerTransport;
+let producer;
+let consumer;
+const mediaCodecs = [
+    {
+        kind: 'audio',
+        mimeType: 'audio/opus',
+        clockRate: 48000,
+        channels: 2,
+    },
+    {
+        kind: 'video',
+        mimeType: 'video/VP8',
+        clockRate: 90000,
+        parameters: {
+            'x-google-start-bitrate': 1000,
+        },
+    },
+]
+
+const createWorker = async () => {
+    worker = await mediasoup.createWorker({
+        rtcMinPort: 2000,
+        rtcMaxPort: 2020
+    })
+    console.log(`Worker pid: ${worker.pid}`)
+
+    worker.on("died", (err) => {
+        console.error(err)
+        process.exit(1)
+    })
+    // await worker.createRouter({ mediaCodecs })
+}
+
+createWorker()
+
+
+
+
+io.on("connection", async (socket) => {
     // RECORD CALLING
 
     socket.on("join-user-record", (({ roomId }) => {
@@ -57,38 +100,14 @@ io.on("connection", (socket) => {
         }, 1000);
     })
 
-    socket.on("streamData1:server", ({ streamData, sendTo, isLastChunk }) => {
-        io.to(sendTo).emit("streamData1:client", { streamData, isLastChunk })
+    router = await worker.createRouter({ mediaCodecs })
+
+    socket.on("getRtpCapabilities", (cb) => {
+        console.log("RtpCapabilities --> ", router.rtpCapabilities)
+        cb({ rtpCapabilities: router.rtpCapabilities })
     })
 
-    socket.on("call-user", ({ to, offer }) => {
-        console.log(`User --> ${socket.id} is trying to call ${to}`)
-        io.to(to).emit("incoming-call", { from: socket.id, offer })
-    })
-
-    socket.on("call-accepted", ({ to, answer }) => {
-        console.log(`Call is accepted by ${socket.id}`)
-        io.to(to).emit("call-accepted-confirm", { from: socket.id, answer })
-    })
-
-    socket.on("peer-nego-needed", ({ to, offer }) => {
-        console.log("peer-nego-needed", offer.type);
-        io.to(to).emit("peer-nego-incoming", { from: socket.id, offer });
-    });
-
-    socket.on("peer-nego-done", ({ to, ans }) => {
-        console.log("peer-nego-done", ans.type);
-        io.to(to).emit("peer-nego-final", { from: socket.id, ans });
-    });
-
-    socket.on("connection-success", (to) => {
-        io.to(to).emit("connection-success");
-    })
-
-    socket.on("call-ended", ({ to }) => {
-        console.log(`Call ended by ${socket.id} for ${to}`)
-        io.to(to).emit("user-left", { from: socket.id })
-    })
+    
 })
 
 server.listen(3000, () => console.log("Server running on PORT ", process.env.PORT))

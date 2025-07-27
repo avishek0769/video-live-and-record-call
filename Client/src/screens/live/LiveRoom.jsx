@@ -1,19 +1,45 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from 'react'
 import ReactPlayer from "react-player"
 import { useNavigate } from 'react-router-dom'
-import peer from '../../service/PeerService'
 import { SocketContext } from '../../context/SocketProvider'
+import mediasoupClient from "mediasoup-client"
 
 function LiveRoom() {
-    const [called, setCalled] = useState(false)
-    const [noOfOffers, setNoOfOffers] = useState(0)
     const [myStream, setMyStream] = useState()
     const [isConnected, setIsConnected] = useState(null)
     const [remoteStream, setRemoteStream] = useState()
     const [remoteSocketId, setRemoteSocketId] = useState(null)
     const [showUserLeftPopup, setShowUserLeftPopup] = useState(false)
+    const [device, setDevice] = useState()
+    const [rtpCapabilities, setRtpCapabilities] = useState()
+    const [producerTransport, setProducerTransport] = useState()
+    const [consumerTransport, setConsumerTransport] = useState()
+    const [producer, setProducer] = useState()
+    const [consumer, setConsumer] = useState()
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
+    const params = {
+        encodings: [
+            {
+                rid: 'r0',
+                maxBitrate: 100000,
+                scalabilityMode: 'S1T3',
+            },
+            {
+                rid: 'r1',
+                maxBitrate: 300000,
+                scalabilityMode: 'S1T3',
+            },
+            {
+                rid: 'r2',
+                maxBitrate: 900000,
+                scalabilityMode: 'S1T3',
+            },
+        ],
+        codecOptions: {
+            videoGoogleStartBitrate: 1000
+        }
+    }
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
@@ -26,197 +52,33 @@ function LiveRoom() {
         console.log(`User ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
-    const handleCall = useCallback(async () => {
-        setCalled(true)
-        setIsConnected(false)
-        const offer = await peer.getOffer()
-        // console.log("Remote Socket id -->", remoteSocketId)
-        // socket.emit("call-user", { to: remoteSocketId, offer }) // Sending the offer immediately after creating it - !
-        console.log("Offer --> ", offer);
-    }, [socket, remoteSocketId, setCalled, myStream]);
+    // Step-1 : Get RTP Capabilities from the router created in the server 
+    const getRtpCapabilities = () => {
+        socket.emit("getRtpCapabilities", (data) => {
+            console.log("RtpCapabilities --> ", data.rtpCapabilities)
+            setRtpCapabilities(data.rtpCapabilities)
+        })
+    }
 
-    const handleIncomingCall = useCallback(async ({ from, offer }) => {
-        console.log("Getting an incoming call....")
-        console.log("Signaling state before setting answer:", peer.peer.signalingState);
-
-        const answer = await peer.getAnswer(offer)
-        // socket.emit("call-accepted", { to: from, answer }) // Sending the answer immediately after creating it - !
-        console.log("Call Accepted with - Answer --> ", answer);
-
-        setNoOfOffers(prev => ++prev)
-    }, [socket])
-
-    const handleCallAcceptedConfirm = useCallback(async ({ answer, from }) => {
-        console.log("Signaling state before setting answer:", peer.peer.signalingState);
-
-        if (!peer.peer.remoteDescription) {
-            await peer.setRemoteDescription(answer)
-        }
-        console.log("Confirm Answer --> ", answer);
-
-        if (myStream && peer.peer.getSenders().length === 0) {
-            for (const track of myStream.getTracks()) {
-                peer.peer.addTrack(track, myStream)
-                console.log("Sending streams....", track)
-            }
-        }
-        setNoOfOffers(prev => ++prev)
-    }, [myStream])
-
-    const handleCallEnd = useCallback(() => {
-        socket.emit("call-ended", { to: remoteSocketId })
-        peer.peer.close()
-        myStream.getTracks().forEach(track => track.stop())
-        setMyStream(null)
-        setRemoteStream(null)
-        setRemoteSocketId(null)
-        setIsConnected(null)
-        setCalled(false)
-        navigate("/live")
-    }, [peer, myStream, setMyStream, setRemoteStream, setRemoteSocketId, setIsConnected, setCalled, remoteSocketId]);
-
-    const handleUserLeft = useCallback(() => {
-        console.log("User left the call");
-        setRemoteStream(null)
-        setRemoteSocketId(null)
-        setIsConnected(null)
-        setCalled(false)
-        setShowUserLeftPopup(true)
-        
-        // Auto-hide popup after 3 seconds
-        setTimeout(() => {
-            setShowUserLeftPopup(false)
-        }, 3000)
-    }, [])
-
-    // const handleNegoNeeded = useCallback(async () => {
-    //     // console.log("RemoteSocket id on habdleNegoAdded --> ", remoteSocketId);
-    //     const offer = await peer.getOffer();
-    //     socket.emit("peer-nego-needed", { offer, to: remoteSocketId }); // Nego --> Sending the offer immediately after creating it - !
-    // }, [remoteSocketId, socket]);
-
-    // const handleNegoNeedIncomming = useCallback(async ({ from, offer }) => {
-    //     console.log("Incoming Nego --> ", offer);
-    //     const ans = await peer.getAnswer(offer); // Nego --> Sending the answer immediately after creating it - !
-    //     socket.emit("peer-nego-done", { to: from, ans });
-    //     setNoOfOffers(prev => ++prev)
-    // }, [socket]);
-
-    // const handleNegoNeedFinal = useCallback(async ({ ans }) => {
-    //     console.log("Nego Final --> ", ans);
-    //     if (!peer.peer.remoteDescription) {
-    //         await peer.setRemoteDescription(answer)
-    //     }
-    //     setNoOfOffers(prev => ++prev)
-    // }, [myStream]);
-
-    useEffect(() => {
-        // console.log("USE EFFECT-->", remoteSocketId);
-        if (remoteSocketId) {
-            peer.peer.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log("New ICE candidate: ", peer.peer.iceGatheringState, event.candidate.candidate);
-                    console.log(peer.peer.localDescription);
-                }
-                else {
-                    console.log("ICE Gathering State: ", peer.peer.iceGatheringState)
-                    if(peer.peer.iceGatheringState == "complete"){
-                        if (called) {
-                            socket.emit("call-user", { to: remoteSocketId, offer: peer.peer.localDescription })
-                        }
-                        else {
-                            socket.emit("call-accepted", { to: remoteSocketId, answer: peer.peer.localDescription })
-                        }
-                        console.log("All ICE candidates have been sent.", event.candidate);
-                    }
-                }
-            };
-
-            peer.peer.onconnectionstatechange = () => {
-                if (peer.peer.connectionState === 'connected') {
-                    setIsConnected(true);
-                }
-                // else if (peer.peer.connectionState === 'failed') {
-                //     setIsConnected(undefined); // Connection failed
-                // }
-                else {
-                    setIsConnected(false);
-                }
-            };
-
-            peer.peer.oniceconnectionstatechange = () => {
-                if (peer.peer.iceConnectionState === 'connected') {
-                    setIsConnected(true);
-                }
-                // else if (peer.peer.iceConnectionState === 'failed') {
-                //     setIsConnected(undefined); // Connection failed
-                // }
-                else {
-                    setIsConnected(false);
-                }
-                console.log('ICE State:', peer.peer.iceConnectionState);
-            };
-
-            peer.peer.addEventListener("negotiationneeded", () => {
-                console.log("NEGOTIATION NEEDED");
-                // handleNegoNeeded()
-            })
-
-            peer.peer.addEventListener("track", (ev) => {
-                setRemoteStream(ev.streams[0])
-            })
-        }
-    }, [remoteSocketId, setRemoteStream, called, myStream])
-
-    useEffect(() => {
-        console.log("noOfOffers --> ", noOfOffers);
-        if (myStream && peer.peer.getSenders().length === 0) {
-            for (const track of myStream.getTracks()) {
-                peer.peer.addTrack(track, myStream)
-                console.log("Sending streams....", track)
-            }
-        }
-        // if (noOfOffers == 2 && called) {
-        //     handleNegoNeeded()
-        //     setIsConnected(true)
-        // }
-    }, [noOfOffers, myStream])
-
+    
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then((stream) => {
-                setMyStream(stream)
-            })
-        // console.log("Now-->", socket.id);
+        .then((stream) => {
+            setMyStream(stream)
+        })
+        getRtpCapabilities()
+        setTimeout(createDevice, 1000)
     }, [setMyStream])
-
-    useEffect(() => {
-        console.log(isConnected, remoteSocketId);
-        if(isConnected === null && remoteSocketId){
-            console.log("Can call")
-            setTimeout(handleCall, 2000)
-        }
-    }, [isConnected, remoteSocketId])
 
     useEffect(() => {
         socket.on("user-joined", handleUserJoined)
         socket.on("user-joined-confirm:client", handleUserJoinedConfirm)
-        socket.on("incoming-call", handleIncomingCall)
-        socket.on("call-accepted-confirm", handleCallAcceptedConfirm)
-        socket.on("user-left", handleUserLeft)
-        // socket.on("peer-nego-incoming", handleNegoNeedIncomming);
-        // socket.on("peer-nego-final", handleNegoNeedFinal);
 
         return () => {
             socket.off("user-joined", handleUserJoined)
             socket.off("user-joined-confirm:client", handleUserJoinedConfirm)
-            socket.off("incoming-call", handleIncomingCall)
-            socket.off("call-accepted-confirm", handleCallAcceptedConfirm)
-            socket.off("user-left", handleUserLeft)
-            // socket.off("peer-nego-incoming", handleNegoNeedIncomming);
-            // socket.off("peer-nego-final", handleNegoNeedFinal);
         }
-    }, [socket, handleUserJoined, handleUserJoinedConfirm, handleIncomingCall, handleCallAcceptedConfirm])
+    }, [socket, handleUserJoined, handleUserJoinedConfirm])
 
 
     return (
@@ -360,17 +222,6 @@ function LiveRoom() {
 
                     {/* Control Buttons */}
                     <div className="flex items-center justify-center gap-2 md:gap-3">
-                        {/* Start Call Button */}
-                        {/* {remoteSocketId && (
-                            <button
-                                onClick={handleCall}
-                                className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
-                            >
-                                <span className="text-sm md:text-lg">📞</span>
-                                <span className="hidden md:inline">Start Call</span>
-                            </button>
-                        )} */}
-
                         {/* End Call Button */}
                         {remoteSocketId && (
                             <button
@@ -410,14 +261,6 @@ function LiveRoom() {
                             </p>
                         </div>
                     )}
-
-                    {/* {isConnected === undefined && (
-                        <div className="text-center mt-1">
-                            <p className="text-red-400 text-sm font-medium">
-                                ❌ Connection failed! Please try again.
-                            </p>
-                        </div>
-                    )} */}
                 </div>
             </div>
         </div>

@@ -1,0 +1,81 @@
+const createWebRTCTransport = async (cb) => {
+    try {
+        let transport = await router.createWebRtcTransport({
+            listenIps: [
+                { ip: '127.0.0.1' }
+            ],
+            enableUdp: true,
+            enableTcp: true,
+            preferUdp: true
+        })
+
+        transport.on("dtlsstatechange", dtlsstate => {
+            if (dtlsstate == "closed"){
+                transport.close()
+            }
+        })
+
+        transport.on("close", () => {
+            console.log("Transport Closed")
+        })
+
+        cb({
+            params: {
+                id: transport.id,
+                iceParameters: transport.iceParameters,
+                iceCandidates: transport.iceCandidates,
+                dtlsParameters: transport.dtlsParameters
+            }
+        })
+        return transport;
+    }
+    catch (error) {
+        console.log(error)
+        cb({ params: { error } })
+    }
+}
+
+socket.on("createWebRTCTransport", async ({ producer }, cb) => {
+    if (producer) producerTransport = await createWebRTCTransport(cb);
+    else consumerTransport = await createWebRTCTransport(cb);
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Step-2: Create a Device using the RTP Capabilities
+const createDevice = useCallback(() => {
+    try {
+        const newDevice = new mediasoupClient.Device()
+        newDevice.load({ routerRtpCapabilities: rtpCapabilities })
+        setDevice(newDevice)
+    }
+    catch (error) {
+        console.log(error)
+        if (error.name === 'UnsupportedError') console.warn('browser not supported');
+    }
+}, [rtpCapabilities])
+
+// Step-3: Create a Producer/Send Transport
+const createSendTransport = () => {
+    socket.emit("createWebRTCTransport", { producer: true }, ({ params }) => {
+        console.log(params)
+        const newProducerTransport = device.createSendTransport(params)
+
+        newProducerTransport.on("connect", ({ dtlsparameters }, callback, errback) => {
+            socket.emit("trans")
+        })
+        setProducerTransport(newProducerTransport)
+    })
+}
+
