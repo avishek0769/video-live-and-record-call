@@ -152,9 +152,9 @@ io.on("connection", async (socket) => {
         await producerTransport.connect({ dtlsParameters })
     })
 
-    socket.on("produceTransport-produce", ({ kind, rtpParameters }, cb) => {
-        producer = producerTransport.produce({ kind, rtpParameters })
-        console.log("Produce ID: ", producer.id)
+    socket.on("produceTransport-produce", async ({ kind, rtpParameters }, cb) => {
+        producer = await producerTransport.produce({ kind, rtpParameters })
+        console.log("Producer ID: ", producer.id)
 
         producer.on("transportclose", () => {
             console.log('transport for this producer closed ')

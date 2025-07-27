@@ -80,10 +80,10 @@ function LiveRoom() {
             console.log(params)
             const newProducerTransport = device.createSendTransport(params)
 
-            newProducerTransport.on("connect", async ({ dtlsparameters }, callback, errback) => {
-                console.log("DTLS Params --> ", dtlsparameters)
+            newProducerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
+                console.log("DTLS Params --> ", dtlsParameters)
                 try {
-                    await socket.emit("produceTransport-connect", { dtlsparameters })
+                    await socket.emit("produceTransport-connect", { dtlsParameters })
                     callback()
                 }
                 catch (error) {
@@ -109,6 +109,21 @@ function LiveRoom() {
             setProducerTransport(newProducerTransport)
         })
     }
+
+    const connectSendTransport = useCallback(async () => {
+        let track = myStream.getVideoTracks()[0]
+        let newProducer = await producerTransport.produce({ track, params });
+        console.log(newProducer)
+
+        newProducer.on("trackend", () => {
+            console.log("Track ended")
+        })
+        newProducer.on("transportclose", () => {
+            console.log("Producer Transport closed")
+        })
+
+        setProducer(newProducer)
+    }, [producerTransport, myStream])
 
 
     useEffect(() => {
@@ -259,6 +274,7 @@ function LiveRoom() {
                     <button onClick={getRtpCapabilities}>Get RTP Caps</button>
                     <button onClick={createDevice}>Create Device</button>
                     <button onClick={createSendTransport}>Create Send Transport</button>
+                    <button onClick={connectSendTransport}>Connect Send Transport</button>
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">
