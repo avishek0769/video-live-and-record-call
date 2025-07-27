@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useState, useCallback } from 'rea
 import ReactPlayer from "react-player"
 import { useNavigate } from 'react-router-dom'
 import { SocketContext } from '../../context/SocketProvider'
-import mediasoupClient from "mediasoup-client"
+import * as mediasoupClient from "mediasoup-client"
 
 function LiveRoom() {
     const [myStream, setMyStream] = useState()
@@ -61,10 +61,11 @@ function LiveRoom() {
     }
 
     // Step-2: Create a Device using the RTP Capabilities
-    const createDevice = useCallback(() => {
+    const createDevice = useCallback(async () => {
         try {
+            console.log(mediasoupClient)
             const newDevice = new mediasoupClient.Device()
-            newDevice.load({ routerRtpCapabilities: rtpCapabilities })
+            await newDevice.load({ routerRtpCapabilities: rtpCapabilities })
             setDevice(newDevice)
         }
         catch (error) {
@@ -73,13 +74,48 @@ function LiveRoom() {
         }
     }, [rtpCapabilities])
 
+    // Step-3: Create a Producer/Send Transport
+    const createSendTransport = () => {
+        socket.emit("createWebRTCTransport", { producer: true }, ({ params }) => {
+            console.log(params)
+            const newProducerTransport = device.createSendTransport(params)
+
+            newProducerTransport.on("connect", async ({ dtlsparameters }, callback, errback) => {
+                console.log("DTLS Params --> ", dtlsparameters)
+                try {
+                    await socket.emit("produceTransport-connect", { dtlsparameters })
+                    callback()
+                }
+                catch (error) {
+                    errback(error)
+                }
+            })
+
+            newProducerTransport.on("produce", (parameters, callback, errback) => {
+                console.log("Parameters --> ", parameters)
+                try {
+                    socket.emit("produceTransport-produce", {
+                        kind: parameters.kind,
+                        rtpParameters: parameters.rtpParameters,
+                        appData: parameters.appData,
+                    }, ({ id }) => {
+                        callback(id)
+                    })
+                }
+                catch (error) {
+                    errback(errback)
+                }
+            })
+            setProducerTransport(newProducerTransport)
+        })
+    }
+
+
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-            setMyStream(stream)
-        })
-        getRtpCapabilities()
-        setTimeout(createDevice, 1000)
+            .then((stream) => {
+                setMyStream(stream)
+            })
     }, [setMyStream])
 
     useEffect(() => {
@@ -220,6 +256,9 @@ function LiveRoom() {
             {/* Control Panel */}
             <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
                 <div className="px-4 py-2 md:px-6 md:py-3 flex justify-center items-center gap-4">
+                    <button onClick={getRtpCapabilities}>Get RTP Caps</button>
+                    <button onClick={createDevice}>Create Device</button>
+                    <button onClick={createSendTransport}>Create Send Transport</button>
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">
@@ -235,7 +274,7 @@ function LiveRoom() {
                     {/* Control Buttons */}
                     <div className="flex items-center justify-center gap-2 md:gap-3">
                         {/* End Call Button */}
-                        {remoteSocketId && (
+                        {/* {remoteSocketId && (
                             <button
                                 onClick={handleCallEnd}
                                 className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
@@ -243,10 +282,10 @@ function LiveRoom() {
                                 <span className="text-sm md:text-lg">📞</span>
                                 <span className="hidden md:inline">End Call</span>
                             </button>
-                        )}
+                        )} */}
 
                         {/* Back Button */}
-                        {!remoteSocketId && (
+                        {/* {!remoteSocketId && (
                             <button
                                 onClick={handleCallEnd}
                                 className="flex items-center gap-1 px-4 py-2 md:px-6 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-lg md:rounded-xl transition-all duration-300 hover:bg-white/20 text-sm md:text-base"
@@ -254,7 +293,7 @@ function LiveRoom() {
                                 <span className="text-sm md:text-lg">←</span>
                                 <span className="hidden md:inline">Back to Home</span>
                             </button>
-                        )}
+                        )} */}
                     </div>
 
                     {/* Connection Status Text */}

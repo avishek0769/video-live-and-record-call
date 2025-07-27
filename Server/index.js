@@ -61,6 +61,43 @@ const createWorker = async () => {
 
 createWorker()
 
+const createWebRTCTransport = async (cb) => {
+    try {
+        let transport = await router.createWebRtcTransport({
+            listenIps: [
+                { ip: '127.0.0.1' }
+            ],
+            enableUdp: true,
+            enableTcp: true,
+            preferUdp: true
+        })
+
+        transport.on("dtlsstatechange", dtlsstate => {
+            if (dtlsstate == "closed") {
+                transport.close()
+            }
+        })
+
+        transport.on("close", () => {
+            console.log("Transport Closed")
+        })
+
+        cb({
+            params: {
+                id: transport.id,
+                iceParameters: transport.iceParameters,
+                iceCandidates: transport.iceCandidates,
+                dtlsParameters: transport.dtlsParameters
+            }
+        })
+        return transport;
+    }
+    catch (error) {
+        console.log(error)
+        cb({ params: { error } })
+    }
+}
+
 
 io.on("connection", async (socket) => {
     // RECORD CALLING
@@ -103,6 +140,28 @@ io.on("connection", async (socket) => {
     socket.on("getRtpCapabilities", (cb) => {
         console.log("RtpCapabilities --> ", router.rtpCapabilities)
         cb({ rtpCapabilities: router.rtpCapabilities })
+    })
+
+    socket.on("createWebRTCTransport", async ({ producer }, cb) => {
+        if (producer) producerTransport = await createWebRTCTransport(cb);
+        else consumerTransport = await createWebRTCTransport(cb);
+    })
+
+    socket.on("produceTransport-connect", async ({ dtlsParameters }) => {
+        console.log("DTLS Params --> ", dtlsParameters)
+        await producerTransport.connect({ dtlsParameters })
+    })
+
+    socket.on("produceTransport-produce", ({ kind, rtpParameters }, cb) => {
+        producer = producerTransport.produce({ kind, rtpParameters })
+        console.log("Produce ID: ", producer.id)
+
+        producer.on("transportclose", () => {
+            console.log('transport for this producer closed ')
+            producer.close()
+        })
+
+        cb({ id: producer.id })
     })
 })
 
