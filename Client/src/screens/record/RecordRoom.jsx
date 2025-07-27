@@ -9,6 +9,7 @@ function RecordRoom() {
     const [remoteSocketId, setRemoteSocketId] = useState(null)
     const [recordingDuration, setRecordingDuration] = useState(0)
     const [cooldownTime, setCooldownTime] = useState(0)
+    const [showUserLeftPopup, setShowUserLeftPopup] = useState(false)
     const videoRef = useRef(null)
     const nextUserRef = useRef(null)
     const recordingTimerRef = useRef(null)
@@ -110,6 +111,7 @@ function RecordRoom() {
     }, [recordingDuration]);
 
     const handleEndCall = useCallback(() => {
+        socket.emit("end-call-record", { to: remoteSocketId });
         // Clear all timers
         if (recordingTimerRef.current) {
             clearInterval(recordingTimerRef.current)
@@ -132,7 +134,36 @@ function RecordRoom() {
         setRecordingDuration(0)
         setCooldownTime(0)
         navigate("/record")
-    }, [myStream, navigate]);
+    }, [myStream, navigate, remoteSocketId]);
+
+    const handleUserLeft = useCallback(() => {
+        console.log("User left the recording session")
+        setRemoteSocketId(null)
+        setState(null)
+        setRecordingDuration(0)
+        setCooldownTime(0)
+        setShowUserLeftPopup(true)
+        nextUserRef.current.src = "";
+
+        // Clear all timers
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current)
+            recordingTimerRef.current = null
+        }
+        if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current)
+            cooldownTimerRef.current = null
+        }
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop()
+        }
+
+        // Auto-hide popup after 3 seconds
+        setTimeout(() => {
+            setShowUserLeftPopup(false)
+        }, 3000)
+    }, [])
 
     // Cleanup timers on unmount
     useEffect(() => {
@@ -168,16 +199,39 @@ function RecordRoom() {
         socket.on("user-joined-record", handleUserJoined)
         socket.on("user-joined-confirm-record:client", handleUserJoinedConfirm)
         socket.on("streamData1-record:client", handleReceivingStream)
+        socket.on("user-left-record", handleUserLeft);
 
         return () => {
             socket.off("user-joined-record", handleUserJoined)
             socket.off("user-joined-confirm-record:client", handleUserJoinedConfirm)
             socket.off("streamData1-record:client", handleReceivingStream)
+            socket.off("user-left-record", handleUserLeft);
         }
-    }, [socket, handleUserJoined, handleUserJoinedConfirm, handleReceivingStream])
+    }, [socket, handleUserJoined, handleUserJoinedConfirm, handleReceivingStream, handleUserLeft])
 
     return (
         <div className="min-h-screen bg-gray-950 text-white font-sans">
+            {/* User Left Popup */}
+            {showUserLeftPopup && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
+                    <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-red-500/30 rounded-2xl p-6 md:p-8 mx-4 max-w-md w-full text-center shadow-2xl shadow-red-500/20">
+                        <div className="text-4xl md:text-5xl mb-4">👋</div>
+                        <h3 className="text-xl md:text-2xl font-bold text-red-400 mb-2">
+                            User Left
+                        </h3>
+                        <p className="text-gray-300 text-sm md:text-base mb-4">
+                            The other participant has left the recording session
+                        </p>
+                        <button
+                            onClick={() => setShowUserLeftPopup(false)}
+                            className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium rounded-lg hover:shadow-lg transition-all duration-200"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <header className="px-6 py-4 border-b border-gray-700 bg-black/30 backdrop-blur-lg sticky top-0 z-50">
                 <div className="flex items-center justify-between">
@@ -254,7 +308,7 @@ function RecordRoom() {
                     <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
                         <div className="h-full relative flex items-center justify-center">
                             <video 
-                                ref={nextUserRef} 
+                                ref={nextUserRef}
                                 autoPlay 
                                 playsInline
                                 className="w-full h-full object-contain"

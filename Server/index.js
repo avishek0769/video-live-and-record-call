@@ -15,12 +15,16 @@ const client = twilio(accountSid, authToken);
 
 const app = express()
 const server = http.createServer(app)
+
 app.use(cors({
     origin: CLIENT_ADDRESS
 }))
 
+let iceServers;
+
 async function createToken() {
     const token = await client.tokens.create();
+    iceServers = token.iceServers
 
     console.log(token);
 }
@@ -50,6 +54,9 @@ io.on("connection", (socket) => {
         io.to(sendTo).emit("streamData1-record:client", { streamData, isLastChunk })
     })
 
+    socket.on("end-call-record", ({ to }) => {
+        io.to(to).emit("user-left-record", { from: socket.id })
+    })
 
     // VIDEO CALLING
 
@@ -98,31 +105,7 @@ io.on("connection", (socket) => {
     })
 })
 
-let iceServers = [
-    {
-        url: 'stun:global.stun.twilio.com:3478',
-        urls: 'stun:global.stun.twilio.com:3478'
-    },
-    {
-        credential: '70IbhLKVXksXHMkFed4RjxTdA4DfbgQvtJGtXpx1ZuY=',
-        url: 'turn:global.turn.twilio.com:3478?transport=udp',
-        urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-        username: '326d8c9e6ac8389071be99e03dc19b6bcd3d8904d33022c16f795111d573ad9d'
-    },
-    {
-        credential: '70IbhLKVXksXHMkFed4RjxTdA4DfbgQvtJGtXpx1ZuY=',
-        url: 'turn:global.turn.twilio.com:3478?transport=tcp',
-        urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
-        username: '326d8c9e6ac8389071be99e03dc19b6bcd3d8904d33022c16f795111d573ad9d'
-    },
-    {
-        credential: '70IbhLKVXksXHMkFed4RjxTdA4DfbgQvtJGtXpx1ZuY=',
-        url: 'turn:global.turn.twilio.com:443?transport=tcp',
-        urls: 'turn:global.turn.twilio.com:443?transport=tcp',
-        username: '326d8c9e6ac8389071be99e03dc19b6bcd3d8904d33022c16f795111d573ad9d'
-    }
-];
-// createToken()
+createToken()
 setInterval(createToken, 86000 * 1000);
 
 app.get("/ice-servers", async (req, res) => {

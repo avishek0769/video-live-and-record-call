@@ -136,11 +136,11 @@ function App() {
                     <ul className="text-sm md:text-base text-gray-300 space-y-2">
                       <li className="flex items-start gap-2">
                         <span className="text-green-400 mt-1">✓</span>
-                        This kind of a Walkie-Talkie with video
+                        This is kind of a Walkie-Talkie with video
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-green-400 mt-1">✓</span>
-                        Temporarily record and send video instantly without saving
+                        Record and send short videos instantly without saving
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-green-400 mt-1">✓</span>
