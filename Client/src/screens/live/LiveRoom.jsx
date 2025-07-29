@@ -16,6 +16,7 @@ function LiveRoom() {
     const [consumerTransport, setConsumerTransport] = useState()
     const [producer, setProducer] = useState()
     const [consumer, setConsumer] = useState()
+    const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
     const params = {
@@ -40,6 +41,8 @@ function LiveRoom() {
             videoGoogleStartBitrate: 1000
         }
     }
+    const producerTransRef = useRef(false)
+    const consumerTransRef = useRef(false)
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
@@ -52,7 +55,7 @@ function LiveRoom() {
         console.log(`User ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
-    // Step-1 : Get RTP Capabilities from the router created in the server 
+    // Step-1: Get RTP Capabilities from the router created in the server 
     const getRtpCapabilities = () => {
         socket.emit("getRtpCapabilities", (data) => {
             console.log("RtpCapabilities --> ", data.rtpCapabilities)
@@ -63,10 +66,10 @@ function LiveRoom() {
     // Step-2: Create a Device using the RTP Capabilities
     const createDevice = useCallback(async () => {
         try {
-            console.log(mediasoupClient)
             const newDevice = new mediasoupClient.Device()
             await newDevice.load({ routerRtpCapabilities: rtpCapabilities })
             setDevice(newDevice)
+            return newDevice
         }
         catch (error) {
             console.log(error)
@@ -75,7 +78,8 @@ function LiveRoom() {
     }, [rtpCapabilities])
 
     // Step-3: Create a Producer/Send Transport
-    const createSendTransport = () => {
+    const createSendTransport = useCallback(() => {
+        console.log("Called createSendTransport")
         socket.emit("createWebRTCTransport", { producer: true }, ({ params }) => {
             console.log(params)
             const newProducerTransport = device.createSendTransport(params)
@@ -108,9 +112,9 @@ function LiveRoom() {
             })
             setProducerTransport(newProducerTransport)
         })
-    }
+    }, [device, producerTransport])
 
-    // Create Producer and start sending your video track by connecting to the Producer Transport
+    // Step-4: Create Producer and start sending your video track by connecting to the Producer Transport
     const connectSendTransport = useCallback(async () => {
         let track = myStream.getVideoTracks()[0]
         let newProducer = await producerTransport.produce({ track, params });
@@ -126,10 +130,12 @@ function LiveRoom() {
         setProducer(newProducer)
     }, [producerTransport, myStream])
 
-    const createRecvTransport = () => {
-        socket.emit("createWebRTCTransport", { producer: false }, async ({ params }) => {
+    // Step-3or: Create a Consumer/Receive Transport
+    const createRecvTransport = useCallback(() => {
+        console.log("Called createRecvTransport")
+        socket.emit("createWebRTCTransport", { producer: false }, ({ params }) => {
             console.log(params)
-            let newConsumerTransport = await device.createRecvTransport(params)
+            let newConsumerTransport = device.createRecvTransport(params)
 
             newConsumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
                 console.log("DTLS Params --> ", dtlsParameters)
@@ -145,8 +151,9 @@ function LiveRoom() {
 
             setConsumerTransport(newConsumerTransport)
         })
-    }
+    }, [device])
 
+    // Step-4or: Create a Consumer and start receiving the prducers video feed
     const connectRecvTransport = useCallback(() => {
         socket.emit("consumerTransport-consume", { rtpCapabilities: device.rtpCapabilities }, async ({ params }) => {
             if(params.error) {
@@ -161,7 +168,45 @@ function LiveRoom() {
 
             socket.emit("consumer-resume")
         })
+    }, [consumerTransport, device])
+
+    const goConnect = useCallback((isProducer) => {
+        setIsCurrentUserProducer(isProducer)
+        !device? getRtpCapabilities() : null;
+    }, [rtpCapabilities, device])
+
+    useEffect(() => {
+        if(rtpCapabilities && isCurrentUserProducer != null) {
+            createDevice()
+        }
+    }, [rtpCapabilities, isCurrentUserProducer])
+
+    useEffect(() => {
+        if(isCurrentUserProducer != null && device){
+            console.log("UseEffect")
+            if(isCurrentUserProducer && !producerTransRef.current) {
+                createSendTransport();
+                producerTransRef.current = true
+            }
+            else if(!isCurrentUserProducer && !consumerTransRef.current) {
+                createRecvTransport();
+                consumerTransRef.current = true
+            }
+        }
+    }, [device, isCurrentUserProducer])
+
+    useEffect(() => {
+        if(producerTransport) {
+            connectSendTransport()
+        }
+    }, [producerTransport])
+
+    useEffect(() => {
+        if(consumerTransport) {
+            connectRecvTransport()
+        }
     }, [consumerTransport])
+        
 
     useEffect(() => {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -308,12 +353,9 @@ function LiveRoom() {
             {/* Control Panel */}
             <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
                 <div className="px-4 py-2 md:px-6 md:py-3 flex justify-center items-center gap-4">
-                    <button onClick={getRtpCapabilities}>Get RTP Caps</button>
-                    <button onClick={createDevice}>Create Device</button>
-                    <button onClick={createSendTransport}>Create Send Transport</button>
-                    <button onClick={connectSendTransport}>Connect Send Transport</button>
-                    <button onClick={createRecvTransport}>Create Receive Transport</button>
-                    <button onClick={connectRecvTransport}>Connect Receive Transport</button>
+                    <button onClick={() => goConnect(true)} className='bg-green-500 p-2'>Publish</button>
+                    <button onClick={() => goConnect(false)} className='bg-blue-500 p-2'>Consume</button>
+                    
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">

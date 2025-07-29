@@ -3,14 +3,20 @@ dotenv.config({
 })
 import { Server } from "socket.io"
 import { CLIENT_ADDRESS } from "../constants.js"
-import http from "http"
+import https from "https"
 import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
 import mediasoup from "mediasoup"
+import fs from "fs"
+
+const options = {
+    key: fs.readFileSync('../ssl/key.pem', 'utf-8'),
+    cert: fs.readFileSync('../ssl/cert.pem', 'utf-8')
+}
 
 const app = express()
-const server = http.createServer(app)
+const server = https.createServer(options, app)
 
 app.use(cors({
     origin: CLIENT_ADDRESS
@@ -65,7 +71,7 @@ const createWebRTCTransport = async (cb) => {
     try {
         let transport = await router.createWebRtcTransport({
             listenIps: [
-                { ip: '127.0.0.1' }
+                { ip: '192.168.1.38' }
             ],
             enableUdp: true,
             enableTcp: true,
@@ -149,6 +155,7 @@ io.on("connection", async (socket) => {
 
     socket.on("producerTransport-connect", async ({ dtlsParameters }) => {
         console.log("DTLS Params --> ", dtlsParameters)
+        console.log("Producer --> connect()")
         await producerTransport.connect({ dtlsParameters })
     })
 
@@ -166,6 +173,7 @@ io.on("connection", async (socket) => {
 
     socket.on("consumerTransport-connect", async ({ dtlsParameters }) => {
         console.log("DTLS Params --> ", dtlsParameters)
+        console.log("Consumer --> connect()")
         await consumerTransport.connect({ dtlsParameters })
     })
 
@@ -180,7 +188,7 @@ io.on("connection", async (socket) => {
                     paused: true,
                 })
                 console.log("Consumer --> ", consumer)
-                
+
                 consumer.on("transportclose", () => {
                     console.log("Transport Closed")
                 })
