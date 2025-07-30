@@ -55,7 +55,7 @@ const mediaCodecs = [
 const createWorker = async () => {
     worker = await mediasoup.createWorker({
         rtcMinPort: 2000,
-        rtcMaxPort: 2020
+        rtcMaxPort: 2120
     })
     console.log(`Worker pid: ${worker.pid}`)
 
@@ -123,7 +123,7 @@ const addTransport = (transport, roomId, socketId, consumer) => {
     ]
     peers[socketId] = {
         ...peers[socketId],
-        transports: [ ...peers[socketId].transports, transport.id]
+        transports: [...peers[socketId].transports, transport.id]
     }
 }
 
@@ -134,7 +134,7 @@ const addProducer = (producer, roomId, socketId) => {
     ]
     peers[socketId] = {
         ...peers[socketId],
-        producers: [ ...peers[socketId].producers, producer.id]
+        producers: [...peers[socketId].producers, producer.id]
     }
 }
 
@@ -145,15 +145,15 @@ const addConsumer = (consumer, roomId, socketId) => {
     ]
     peers[socketId] = {
         ...peers[socketId],
-        consumers: [ ...peers[socketId].consumers, consumer.id]
+        consumers: [...peers[socketId].consumers, consumer.id]
     }
 }
 let i = 0
-const informConsumers = (socketId, roomId, producerId) => {
-    console.log("Producers --> ", producers)
+const informProducersToConsume = (socketId, roomId, producerId) => {
+    // console.log("Producers --> ", producers)
     producers.forEach(producerData => {
-        if(producerData.socketId != socketId && producerData.roomId == roomId) {
-            console.log("Inform Consumers")
+        if (producerData.socketId != socketId && producerData.roomId == roomId) {
+            // console.log("Inform Consumers")
             peers[producerData.socketId].socket.emit("new-producer", { producerId, i: ++i })
         }
     })
@@ -173,7 +173,7 @@ io.on("connection", async (socket) => {
     }))
 
     socket.on("user-joined-confirm-record:server", ({ user2Id, socketId }) => {
-        console.log("Connected sockets:", Array.from(io.sockets.sockets.keys()));
+        // console.log("Connected sockets:", Array.from(io.sockets.sockets.keys()));
         setTimeout(() => {
             io.to(user2Id).emit("user-joined-confirm-record:client", socketId)
         }, 1000);
@@ -238,18 +238,18 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("producerTransport-connect", async ({ dtlsParameters }) => {
-        console.log("DTLS Params --> ", dtlsParameters)
+        // console.log("DTLS Params --> ", dtlsParameters)
         await getProducerTransport(socket.id).connect({ dtlsParameters })
     })
 
     socket.on("producerTransport-produce", async ({ kind, rtpParameters }, cb) => {
         const producer = await getProducerTransport(socket.id).produce({ kind, rtpParameters })
-        console.log("Producer ID: ", producer.id)
+        console.log("My Producer ID: ", producer.id)
 
         const { roomId } = peers[socket.id]
         addProducer(producer, roomId, socket.id)
 
-        informConsumers(socket.id, roomId, producer.id)
+        informProducersToConsume(socket.id, roomId, producer.id)
 
         producer.on("transportclose", () => {
             console.log('transport for this producer closed ')
@@ -263,7 +263,7 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("consumerTransport-connect", async ({ dtlsParameters, serverConsumerTransportId }) => {
-        console.log("DTLS Params --> ", dtlsParameters)
+        // console.log("DTLS Params --> ", dtlsParameters)
         const consumerTransport = transports.find(transportData =>
             transportData.consumer && transportData.transport.id == serverConsumerTransportId
         ).transport;
@@ -274,10 +274,10 @@ io.on("connection", async (socket) => {
     socket.on("consumerTransport-consume", async ({ rtpCapabilities, serverConsumerTransportId, remoteProducerId }, cb) => {
         const { roomId } = peers[socket.id]
         const { router } = rooms[roomId]
-        const consumerTransport = transports.find(transportData => 
+        const consumerTransport = transports.find(transportData =>
             transportData.transport.id == serverConsumerTransportId && transportData.consumer
         ).transport
-        
+
         let canConsume = router.canConsume({ producerId: remoteProducerId, rtpCapabilities });
 
         try {
@@ -287,7 +287,7 @@ io.on("connection", async (socket) => {
                     rtpCapabilities,
                     paused: true,
                 })
-                console.log("Consumer --> ", consumer)
+                // console.log("Consumer --> ", consumer)
 
                 consumer.on("transportclose", () => {
                     console.log("Transport Closed")
@@ -320,6 +320,19 @@ io.on("connection", async (socket) => {
                 }
             })
         }
+    })
+
+    socket.on("getProducers", (cb) => {
+        const { roomId } = peers[socket.id]
+        let producerList = []
+
+        producers.forEach(producerData => {
+            if (producerData.socketId !== socket.id && producerData.roomId === roomId) {
+                producerList = [...producerList, producerData.producer.id]
+            }
+        })
+        console.log(producerList)
+        cb(producerList)
     })
 
     socket.on("consumer-resume", async ({ consumerId }) => {

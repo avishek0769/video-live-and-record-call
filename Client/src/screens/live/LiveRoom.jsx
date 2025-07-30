@@ -18,11 +18,13 @@ function LiveRoom() {
     const [consumer, setConsumer] = useState()
     const [audioTransporter, setAudioTransporter] = useState()
     const [videoTransporter, setVideoTransporter] = useState()
-    const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState({})
+    const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState([])
+    const [canConnectToRecvTransport, setCanConnectToRecvTransport] = useState(false)
     // const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
     const producerTransRef = useRef(false)
+    const isSendTransportConnectedRef = useRef(false)
     // const consumerTransRef = useRef(false)
     const roomJoinedRef = useRef(false)
     const deviceRef = useRef(null)
@@ -62,8 +64,13 @@ function LiveRoom() {
     }, [setRemoteSocketId])
 
     const getProducers = () => {
+        let i = 0;
         socket.emit("getProducers", producerIds => {
+            console.log("Getting Producer ", i++, producerIds)
             producerIds.forEach(signalNewRecvTransport)
+            setTimeout(() => {
+                setCanConnectToRecvTransport(true)
+            }, 1500);
         })
     }
 
@@ -78,8 +85,9 @@ function LiveRoom() {
     }
 
     const handleNewProducer = ({ producerId, i }) => {
-        console.log("New Producer", i)
+        console.log("New Producer", i, producerId)
         signalNewRecvTransport(producerId)
+        setCanConnectToRecvTransport(true)
     }
 
     const handleCallEnd = () => {
@@ -115,7 +123,7 @@ function LiveRoom() {
 
         socket.emit("createWebRTCTransport", { consumer: false }, ({ params }) => {
             console.log(params)
-            const producerTransport = device.createSendTransport(params)
+            const producerTransport = deviceRef.current.createSendTransport(params)
 
             producerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
                 console.log("DTLS Params --> ", dtlsParameters)
@@ -137,7 +145,10 @@ function LiveRoom() {
                         appData: parameters.appData,
                     }, ({ id, producerExists }) => {
                         callback(id)
-                        if (producerExists) getProducers();
+                        if (producerExists) {
+                            console.log("Producer Exists --> ", producerExists)
+                            getProducers()
+                        };
                     })
                 }
                 catch (error) {
@@ -187,7 +198,7 @@ function LiveRoom() {
                 console.error(params.error)
                 return
             }
-            console.log("Parameters in Signal New Recv --> ", params)
+            // console.log("Parameters in Signal New Recv --> ", params)
             console.log("Device in Signal New Recv --> ", deviceRef.current)
             let consumerTransport = deviceRef.current.createRecvTransport(params)
 
@@ -206,29 +217,34 @@ function LiveRoom() {
                 }
             })
 
-            setConsumerTransport(prev => [
+            // setConsumerTransport(prev => [
+            //     ...prev,
+            //     {
+            //         consumerTransport,
+            //         remoteProducerId,
+            //         consumer,
+            //         serverConsumerTransportId: params.id
+            //     }
+            // ])
+            setConnectingConsumerTransportData(prev => [
                 ...prev,
                 {
-                    consumerTransport,
+                    serverConsumerTransportId: params.id,
                     remoteProducerId,
-                    consumer,
-                    serverConsumerTransportId: params.id
+                    consumerTransport
                 }
             ])
-            setConnectingConsumerTransportData({
-                serverConsumerTransportId: params.id,
-                remoteProducerId,
-                consumerTransport
-            })
         })
     }, [device, consumingTransport])
 
     // Step-4or: Create a Consumer and start receiving the prducers video feed
     const connectRecvTransport = useCallback((consumerTransport, remoteProducerId, serverConsumerTransportId) => {
+        console.log("Called connectRecvTransport")
+
         socket.emit("consumerTransport-consume", {
-            rtpCapabilities: device.rtpCapabilities,
-            serverConsumerTransportId: connectingConsumerTransportData.serverConsumerTransportId,
-            remoteProducerId: connectingConsumerTransportData.remoteProducerId
+            rtpCapabilities: deviceRef.current.rtpCapabilities,
+            serverConsumerTransportId,
+            remoteProducerId
         },
             async ({ params }) => {
                 if (params.error) {
@@ -236,6 +252,7 @@ function LiveRoom() {
                     return
                 }
                 let consumer = await consumerTransport.consume(params)
+                console.log("Consumer --> ", serverConsumerTransportId, consumer)
 
                 setConsumerTransport(prev => [
                     ...prev,
@@ -263,8 +280,8 @@ function LiveRoom() {
 
     useEffect(() => {
         if (device) {
-            console.log("UseEffect")
             if (!producerTransRef.current) {
+                console.log("UseEffect to CreateSendTransport")
                 createSendTransport();
                 producerTransRef.current = true
             }
@@ -276,17 +293,21 @@ function LiveRoom() {
     }, [device])
 
     useEffect(() => {
-        if (producerTransport && myStream && producerTransRef.current) {
+        if (producerTransport && myStream && producerTransRef.current && !isSendTransportConnectedRef.current) {
             connectSendTransport()
+            isSendTransportConnectedRef.current = true
         }
     }, [producerTransport, myStream])
 
     useEffect(() => {
-        if (Object.keys(connectingConsumerTransportData).length) {
-            let { consumerTransport, remoteProducerId, serverConsumerTransportId } = connectingConsumerTransportData;
-            connectRecvTransport(consumerTransport, remoteProducerId, serverConsumerTransportId)
+        console.log(Object.keys(connectingConsumerTransportData).length, canConnectToRecvTransport)
+        if (Object.keys(connectingConsumerTransportData).length && canConnectToRecvTransport) {
+            connectingConsumerTransportData.forEach(elem => {
+                let { consumerTransport, remoteProducerId, serverConsumerTransportId } = elem;
+                connectRecvTransport(consumerTransport, remoteProducerId, serverConsumerTransportId)
+            })
         }
-    }, [connectingConsumerTransportData])
+    }, [canConnectToRecvTransport, connectingConsumerTransportData])
 
     useEffect(() => {
         if (!myStream && !roomJoinedRef.current) {
