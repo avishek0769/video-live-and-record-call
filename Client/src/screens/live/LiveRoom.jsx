@@ -1,24 +1,31 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from 'react'
 import ReactPlayer from "react-player"
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { SocketContext } from '../../context/SocketProvider'
 import * as mediasoupClient from "mediasoup-client"
 
 function LiveRoom() {
     const [myStream, setMyStream] = useState()
     const [isConnected, setIsConnected] = useState(null)
-    const [remoteStream, setRemoteStream] = useState()
+    const [remoteStream, setRemoteStream] = useState([])
     const [remoteSocketId, setRemoteSocketId] = useState(null)
     const [showUserLeftPopup, setShowUserLeftPopup] = useState(false)
     const [device, setDevice] = useState()
     const [rtpCapabilities, setRtpCapabilities] = useState()
     const [producerTransport, setProducerTransport] = useState()
-    const [consumerTransport, setConsumerTransport] = useState()
-    const [producer, setProducer] = useState()
+    const [consumerTransport, setConsumerTransport] = useState([])
+    const [consumingTransport, setConsumingTransport] = useState([])
     const [consumer, setConsumer] = useState()
-    const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
+    const [audioTransporter, setAudioTransporter] = useState()
+    const [videoTransporter, setVideoTransporter] = useState()
+    const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState({})
+    // const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
+    const producerTransRef = useRef(false)
+    // const consumerTransRef = useRef(false)
+    const roomJoinedRef = useRef(false)
+    const deviceRef = useRef(null)
     const params = {
         encodings: [
             {
@@ -41,8 +48,7 @@ function LiveRoom() {
             videoGoogleStartBitrate: 1000
         }
     }
-    const producerTransRef = useRef(false)
-    const consumerTransRef = useRef(false)
+    const { roomId } = useParams()
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
@@ -55,9 +61,34 @@ function LiveRoom() {
         console.log(`User ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
+    const getProducers = () => {
+        socket.emit("getProducers", producerIds => {
+            producerIds.forEach(signalNewRecvTransport)
+        })
+    }
+
+    const handleProducerClose = ({ remoteProducerId }) => {
+        const producerToClose = consumerTransport.find(transportData => transportData.producerId === remoteProducerId)
+        producerToClose.consumerTransport.close()
+        producerToClose.consumer.close()
+
+        setConsumerTransport(prev => prev.filter(transportData => transportData.producerId !== remoteProducerId))
+
+        // Remove the remote stream
+    }
+
+    const handleNewProducer = ({ producerId, i }) => {
+        console.log("New Producer", i)
+        signalNewRecvTransport(producerId)
+    }
+
+    const handleCallEnd = () => {
+
+    }
+
     // Step-1: Get RTP Capabilities from the router created in the server 
-    const getRtpCapabilities = () => {
-        socket.emit("getRtpCapabilities", (data) => {
+    const joinRoom = () => {
+        socket.emit("joinRoom", { roomId }, (data) => {
             console.log("RtpCapabilities --> ", data.rtpCapabilities)
             setRtpCapabilities(data.rtpCapabilities)
         })
@@ -68,6 +99,7 @@ function LiveRoom() {
         try {
             const newDevice = new mediasoupClient.Device()
             await newDevice.load({ routerRtpCapabilities: rtpCapabilities })
+            deviceRef.current = newDevice
             setDevice(newDevice)
             return newDevice
         }
@@ -80,11 +112,12 @@ function LiveRoom() {
     // Step-3: Create a Producer/Send Transport
     const createSendTransport = useCallback(() => {
         console.log("Called createSendTransport")
-        socket.emit("createWebRTCTransport", { producer: true }, ({ params }) => {
-            console.log(params)
-            const newProducerTransport = device.createSendTransport(params)
 
-            newProducerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
+        socket.emit("createWebRTCTransport", { consumer: false }, ({ params }) => {
+            console.log(params)
+            const producerTransport = device.createSendTransport(params)
+
+            producerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
                 console.log("DTLS Params --> ", dtlsParameters)
                 try {
                     await socket.emit("producerTransport-connect", { dtlsParameters })
@@ -95,52 +128,76 @@ function LiveRoom() {
                 }
             })
 
-            newProducerTransport.on("produce", (parameters, callback, errback) => {
+            producerTransport.on("produce", (parameters, callback, errback) => {
                 console.log("Parameters --> ", parameters)
                 try {
                     socket.emit("producerTransport-produce", {
                         kind: parameters.kind,
                         rtpParameters: parameters.rtpParameters,
                         appData: parameters.appData,
-                    }, ({ id }) => {
+                    }, ({ id, producerExists }) => {
                         callback(id)
+                        if (producerExists) getProducers();
                     })
                 }
                 catch (error) {
                     errback(errback)
                 }
             })
-            setProducerTransport(newProducerTransport)
+            setProducerTransport(producerTransport)
         })
     }, [device, producerTransport])
 
     // Step-4: Create Producer and start sending your video track by connecting to the Producer Transport
     const connectSendTransport = useCallback(async () => {
-        let track = myStream.getVideoTracks()[0]
-        let newProducer = await producerTransport.produce({ track, params });
-        console.log(newProducer)
+        let videoTrack = myStream.getVideoTracks()[0]
+        let audioTrack = myStream.getAudioTracks()[0]
 
-        newProducer.on("trackend", () => {
-            console.log("Track ended")
-        })
-        newProducer.on("transportclose", () => {
-            console.log("Producer Transport closed")
-        })
+        let newVideoProducer = await producerTransport.produce({ track: videoTrack, params });
+        // let newAudioProducer = await producerTransport.produce({ track: audioTrack });
 
-        setProducer(newProducer)
+        newVideoProducer.on("trackend", () => {
+            console.log("Video Track ended")
+        })
+        newVideoProducer.on("transportclose", () => {
+            console.log("Video Producer Transport closed")
+        })
+        // newAudioProducer.on("trackend", () => {
+        //     console.log("Audio Track ended")
+        // })
+        // newAudioProducer.on("transportclose", () => {
+        //     console.log("Audio Producer Transport closed")
+        // })
+
+        setVideoTransporter(newVideoProducer)
+        // setAudioTransporter(newAudioProducer)
     }, [producerTransport, myStream])
 
     // Step-3or: Create a Consumer/Receive Transport
-    const createRecvTransport = useCallback(() => {
-        console.log("Called createRecvTransport")
-        socket.emit("createWebRTCTransport", { producer: false }, ({ params }) => {
-            console.log(params)
-            let newConsumerTransport = device.createRecvTransport(params)
+    const signalNewRecvTransport = useCallback((remoteProducerId) => {
+        console.log("Called signalNewRecvTransport")
 
-            newConsumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
+        if (consumingTransport.includes(remoteProducerId)) return;
+        else {
+            setConsumingTransport(prev => [...prev, remoteProducerId])
+        }
+
+        socket.emit("createWebRTCTransport", { consumer: true }, ({ params }) => {
+            if (params.error) {
+                console.error(params.error)
+                return
+            }
+            console.log("Parameters in Signal New Recv --> ", params)
+            console.log("Device in Signal New Recv --> ", deviceRef.current)
+            let consumerTransport = deviceRef.current.createRecvTransport(params)
+
+            consumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
                 console.log("DTLS Params --> ", dtlsParameters)
                 try {
-                    socket.emit("consumerTransport-connect", { dtlsParameters })
+                    socket.emit("consumerTransport-connect", {
+                        dtlsParameters,
+                        serverConsumerTransportId: params.id
+                    })
                     callback()
                 }
                 catch (error) {
@@ -149,82 +206,127 @@ function LiveRoom() {
                 }
             })
 
-            setConsumerTransport(newConsumerTransport)
+            setConsumerTransport(prev => [
+                ...prev,
+                {
+                    consumerTransport,
+                    remoteProducerId,
+                    consumer,
+                    serverConsumerTransportId: params.id
+                }
+            ])
+            setConnectingConsumerTransportData({
+                serverConsumerTransportId: params.id,
+                remoteProducerId,
+                consumerTransport
+            })
         })
-    }, [device])
+    }, [device, consumingTransport])
 
     // Step-4or: Create a Consumer and start receiving the prducers video feed
-    const connectRecvTransport = useCallback(() => {
-        socket.emit("consumerTransport-consume", { rtpCapabilities: device.rtpCapabilities }, async ({ params }) => {
-            if(params.error) {
-                console.error(error)
-                return
-            }
-            let newConsumer = await consumerTransport.consume(params)
+    const connectRecvTransport = useCallback((consumerTransport, remoteProducerId, serverConsumerTransportId) => {
+        socket.emit("consumerTransport-consume", {
+            rtpCapabilities: device.rtpCapabilities,
+            serverConsumerTransportId: connectingConsumerTransportData.serverConsumerTransportId,
+            remoteProducerId: connectingConsumerTransportData.remoteProducerId
+        },
+            async ({ params }) => {
+                if (params.error) {
+                    console.error(error)
+                    return
+                }
+                let consumer = await consumerTransport.consume(params)
 
-            const { track } = newConsumer;
-            const stream = new MediaStream([track])
-            setRemoteStream(stream)
+                setConsumerTransport(prev => [
+                    ...prev,
+                    {
+                        consumerTransport,
+                        remoteProducerId,
+                        consumer,
+                        serverConsumerTransportId
+                    }
+                ])
 
-            socket.emit("consumer-resume")
-        })
+                const { track } = consumer;
+                const stream = new MediaStream([track])
+
+                setRemoteStream(prev => [...prev, stream])
+                socket.emit("consumer-resume", { consumerId: consumer.id })
+            })
     }, [consumerTransport, device])
 
-    const goConnect = useCallback((isProducer) => {
-        setIsCurrentUserProducer(isProducer)
-        !device? getRtpCapabilities() : null;
-    }, [rtpCapabilities, device])
-
     useEffect(() => {
-        if(rtpCapabilities && isCurrentUserProducer != null) {
+        if (rtpCapabilities) {
             createDevice()
         }
-    }, [rtpCapabilities, isCurrentUserProducer])
+    }, [rtpCapabilities])
 
     useEffect(() => {
-        if(isCurrentUserProducer != null && device){
+        if (device) {
             console.log("UseEffect")
-            if(isCurrentUserProducer && !producerTransRef.current) {
+            if (!producerTransRef.current) {
                 createSendTransport();
                 producerTransRef.current = true
             }
-            else if(!isCurrentUserProducer && !consumerTransRef.current) {
-                createRecvTransport();
-                consumerTransRef.current = true
-            }
+            // else if(!consumerTransRef.current) {
+            //     createRecvTransport();
+            //     consumerTransRef.current = true
+            // }
         }
-    }, [device, isCurrentUserProducer])
+    }, [device])
 
     useEffect(() => {
-        if(producerTransport) {
+        if (producerTransport && myStream && producerTransRef.current) {
             connectSendTransport()
         }
-    }, [producerTransport])
+    }, [producerTransport, myStream])
 
     useEffect(() => {
-        if(consumerTransport) {
-            connectRecvTransport()
+        if (Object.keys(connectingConsumerTransportData).length) {
+            let { consumerTransport, remoteProducerId, serverConsumerTransportId } = connectingConsumerTransportData;
+            connectRecvTransport(consumerTransport, remoteProducerId, serverConsumerTransportId)
         }
-    }, [consumerTransport])
-        
+    }, [connectingConsumerTransportData])
 
     useEffect(() => {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then((stream) => {
-                setMyStream(stream)
-            })
-    }, [setMyStream])
+        if (!myStream && !roomJoinedRef.current) {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then((stream) => {
+                    setMyStream(stream)
+                })
+        }
+        if (myStream && !roomJoinedRef.current) {
+            // console.log("Join Room Called", "Room joined", roomJoinedRef.current)
+            joinRoom()
+            roomJoinedRef.current = true
+        }
+    }, [myStream])
 
     useEffect(() => {
         socket.on("user-joined", handleUserJoined)
         socket.on("user-joined-confirm:client", handleUserJoinedConfirm)
+        socket.on("new-producer", handleNewProducer)
+        socket.on('producer-closed', handleProducerClose)
 
         return () => {
             socket.off("user-joined", handleUserJoined)
             socket.off("user-joined-confirm:client", handleUserJoinedConfirm)
+            socket.off("new-producer", handleNewProducer)
+            socket.off('producer-closed', handleProducerClose)
         }
     }, [socket, handleUserJoined, handleUserJoinedConfirm])
 
+    // Helper function to determine grid layout based on participant count
+    const getGridLayout = (participantCount) => {
+        if (participantCount <= 1) return "grid-cols-1"
+        if (participantCount === 2) return "grid-cols-1 md:grid-cols-2"
+        if (participantCount <= 4) return "grid-cols-1 md:grid-cols-2"
+        if (participantCount <= 6) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+    }
+
+    // Calculate total participants (my stream + remote streams)
+    const totalParticipants = 1 + (remoteStream?.length || 0)
 
     return (
         <div className="min-h-screen bg-gray-950 text-white font-sans">
@@ -288,9 +390,9 @@ function LiveRoom() {
 
             {/* Video Container */}
             <div className="flex-1 p-4 md:p-6">
-                <div className="h-[calc(100vh-120px)] flex flex-col md:flex-row gap-4 md:gap-6">
+                <div className={`h-[calc(100vh-120px)] grid gap-4 md:gap-6 ${getGridLayout(totalParticipants)}`}>
                     {/* My Video */}
-                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
                         <div className="h-full relative">
                             {myStream ? (
                                 <ReactPlayer
@@ -304,8 +406,8 @@ function LiveRoom() {
                             ) : (
                                 <div className="h-full flex items-center justify-center">
                                     <div className="text-center">
-                                        <div className="text-6xl md:text-8xl mb-4 opacity-30">📹</div>
-                                        <p className="text-gray-400">Loading camera...</p>
+                                        <div className="text-4xl md:text-6xl mb-4 opacity-30">📹</div>
+                                        <p className="text-gray-400 text-sm">Loading camera...</p>
                                     </div>
                                 </div>
                             )}
@@ -317,45 +419,59 @@ function LiveRoom() {
                         </div>
                     </div>
 
-                    {/* Remote Video */}
-                    <div className="flex-1 bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
-                        <div className="h-full relative">
-                            {remoteStream ? (
-                                <ReactPlayer
-                                    url={remoteStream}
-                                    playing
-                                    width="100%"
-                                    height="100%"
-                                    style={{ objectFit: 'cover' }}
-                                />
-                            ) : (
-                                <div className="h-full flex items-center justify-center">
-                                    <div className="text-center">
-                                        <div className="text-6xl md:text-8xl mb-4 opacity-30">👤</div>
-                                        <p className="text-gray-400">
-                                            {remoteSocketId ? "Waiting for video..." : "Waiting for participant..."}
-                                        </p>
+                    {/* Remote Video Streams */}
+                    {remoteStream && remoteStream.length > 0 ? (
+                        remoteStream.map((stream, index) => (
+                            <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                                <div className="h-full relative">
+                                    <ReactPlayer
+                                        url={stream}
+                                        playing
+                                        width="100%"
+                                        height="100%"
+                                        style={{ objectFit: 'cover' }}
+                                    />
+
+                                    {/* Video Label */}
+                                    <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                        <span className="text-white text-sm font-medium">
+                                            Participant {index + 1}
+                                        </span>
                                     </div>
                                 </div>
-                            )}
-
-                            {/* Video Label */}
-                            {remoteStream && (
-                                <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
-                                    <span className="text-white text-sm font-medium">Participant</span>
+                            </div>
+                        ))
+                    ) : (
+                        // Placeholder when no remote streams
+                        remoteSocketId && (
+                            <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
+                                        <p className="text-gray-400 text-sm">Waiting for video...</p>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
+                        )
+                    )}
+
+                    {/* Waiting for participants placeholder */}
+                    {!remoteSocketId && (
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                            <div className="h-full flex items-center justify-center">
+                                <div className="text-center">
+                                    <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
+                                    <p className="text-gray-400 text-sm">Waiting for participant...</p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
             {/* Control Panel */}
             <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent backdrop-blur-lg border-t border-gray-700">
                 <div className="px-4 py-2 md:px-6 md:py-3 flex justify-center items-center gap-4">
-                    <button onClick={() => goConnect(true)} className='bg-green-500 p-2'>Publish</button>
-                    <button onClick={() => goConnect(false)} className='bg-blue-500 p-2'>Consume</button>
-                    
                     {/* Status Message */}
                     {isConnected === null && (
                         <div className="text-center mb-2">
@@ -371,7 +487,7 @@ function LiveRoom() {
                     {/* Control Buttons */}
                     <div className="flex items-center justify-center gap-2 md:gap-3">
                         {/* End Call Button */}
-                        {/* {remoteSocketId && (
+                        {remoteSocketId && (
                             <button
                                 onClick={handleCallEnd}
                                 className="flex items-center gap-1 px-4 py-2 md:px-6 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg md:rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 transition-all duration-300 hover:scale-105 text-sm md:text-base"
@@ -379,10 +495,10 @@ function LiveRoom() {
                                 <span className="text-sm md:text-lg">📞</span>
                                 <span className="hidden md:inline">End Call</span>
                             </button>
-                        )} */}
+                        )}
 
                         {/* Back Button */}
-                        {/* {!remoteSocketId && (
+                        {!remoteSocketId && (
                             <button
                                 onClick={handleCallEnd}
                                 className="flex items-center gap-1 px-4 py-2 md:px-6 bg-white/10 border border-white/20 text-gray-300 font-semibold rounded-lg md:rounded-xl transition-all duration-300 hover:bg-white/20 text-sm md:text-base"
@@ -390,7 +506,7 @@ function LiveRoom() {
                                 <span className="text-sm md:text-lg">←</span>
                                 <span className="hidden md:inline">Back to Home</span>
                             </button>
-                        )} */}
+                        )}
                     </div>
 
                     {/* Connection Status Text */}
