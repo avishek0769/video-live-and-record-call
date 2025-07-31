@@ -306,6 +306,9 @@ function LiveRoom() {
                 let { consumerTransport, remoteProducerId, serverConsumerTransportId } = elem;
                 connectRecvTransport(consumerTransport, remoteProducerId, serverConsumerTransportId)
             })
+            setTimeout(() => {
+                setConnectingConsumerTransportData([])
+            }, 200);
         }
     }, [canConnectToRecvTransport, connectingConsumerTransportData])
 
