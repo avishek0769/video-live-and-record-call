@@ -343,10 +343,10 @@ function LiveRoom() {
     // Helper function to determine grid layout based on participant count
     const getGridLayout = (participantCount) => {
         if (participantCount <= 1) return "grid-cols-1"
-        if (participantCount === 2) return "grid-cols-1 md:grid-cols-2"
-        if (participantCount <= 4) return "grid-cols-1 md:grid-cols-2"
-        if (participantCount <= 6) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        if (participantCount === 2) return "grid-cols-2 md:grid-cols-2"
+        if (participantCount <= 4) return "grid-cols-2 md:grid-cols-2"
+        if (participantCount <= 6) return "grid-cols-2 md:grid-cols-2 lg:grid-cols-3"
+        return "grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
     }
 
     // Calculate total participants (my stream + remote streams)
@@ -414,9 +414,9 @@ function LiveRoom() {
 
             {/* Video Container */}
             <div className="flex-1 p-4 md:p-6">
-                <div className={`h-[calc(100vh-120px)] grid gap-4 md:gap-6 ${getGridLayout(totalParticipants)}`}>
+                <div className={`min-h-0 max-h-[calc(100vh-140px)] grid gap-4 md:gap-6 auto-rows-fr ${getGridLayout(totalParticipants)}`}>
                     {/* My Video */}
-                    <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
                         <div className="h-full relative">
                             {myStream ? (
                                 <ReactPlayer
@@ -446,7 +446,7 @@ function LiveRoom() {
                     {/* Remote Video Streams */}
                     {remoteStream && remoteStream.length > 0 ? (
                         remoteStream.map((stream, index) => (
-                            <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                            <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
                                 <div className="h-full relative">
                                     <ReactPlayer
                                         url={stream}
@@ -457,18 +457,18 @@ function LiveRoom() {
                                     />
 
                                     {/* Video Label */}
-                                    <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                    {/* <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
                                         <span className="text-white text-sm font-medium">
                                             Participant {index + 1}
                                         </span>
-                                    </div>
+                                    </div> */}
                                 </div>
                             </div>
                         ))
                     ) : (
                         // Placeholder when no remote streams
                         remoteSocketId && (
-                            <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                            <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
                                 <div className="h-full flex items-center justify-center">
                                     <div className="text-center">
                                         <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
@@ -481,7 +481,7 @@ function LiveRoom() {
 
                     {/* Waiting for participants placeholder */}
                     {!remoteSocketId && (
-                        <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg">
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
                             <div className="h-full flex items-center justify-center">
                                 <div className="text-center">
                                     <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
