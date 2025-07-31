@@ -165,7 +165,7 @@ function LiveRoom() {
         let audioTrack = myStream.getAudioTracks()[0]
 
         let newVideoProducer = await producerTransport.produce({ track: videoTrack, params });
-        // let newAudioProducer = await producerTransport.produce({ track: audioTrack });
+        let newAudioProducer = await producerTransport.produce({ track: audioTrack });
 
         newVideoProducer.on("trackend", () => {
             console.log("Video Track ended")
@@ -173,15 +173,15 @@ function LiveRoom() {
         newVideoProducer.on("transportclose", () => {
             console.log("Video Producer Transport closed")
         })
-        // newAudioProducer.on("trackend", () => {
-        //     console.log("Audio Track ended")
-        // })
-        // newAudioProducer.on("transportclose", () => {
-        //     console.log("Audio Producer Transport closed")
-        // })
+        newAudioProducer.on("trackend", () => {
+            console.log("Audio Track ended")
+        })
+        newAudioProducer.on("transportclose", () => {
+            console.log("Audio Producer Transport closed")
+        })
 
         setVideoTransporter(newVideoProducer)
-        // setAudioTransporter(newAudioProducer)
+        setAudioTransporter(newAudioProducer)
     }, [producerTransport, myStream])
 
     // Step-3or: Create a Consumer/Receive Transport
@@ -413,10 +413,10 @@ function LiveRoom() {
             </header>
 
             {/* Video Container */}
-            <div className="flex-1 p-4 md:p-6">
-                <div className={`min-h-0 max-h-[calc(100vh-140px)] grid gap-4 md:gap-6 auto-rows-fr ${getGridLayout(totalParticipants)}`}>
+            <div className="flex-1 p-4 md:p-6 overflow-hidden">
+                <div className={`h-[calc(100vh-140px)] overflow-y-auto overflow-x-hidden grid gap-4 md:gap-6 auto-rows-min ${getGridLayout(totalParticipants)}`}>
                     {/* My Video */}
-                    <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] h-[250px] md:h-[300px]">
                         <div className="h-full relative">
                             {myStream ? (
                                 <ReactPlayer
@@ -446,7 +446,7 @@ function LiveRoom() {
                     {/* Remote Video Streams */}
                     {remoteStream && remoteStream.length > 0 ? (
                         remoteStream.map((stream, index) => (
-                            <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
+                            <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] h-[250px] md:h-[300px]">
                                 <div className="h-full relative">
                                     <ReactPlayer
                                         url={stream}
@@ -457,18 +457,18 @@ function LiveRoom() {
                                     />
 
                                     {/* Video Label */}
-                                    {/* <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
+                                    <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg">
                                         <span className="text-white text-sm font-medium">
                                             Participant {index + 1}
                                         </span>
-                                    </div> */}
+                                    </div>
                                 </div>
                             </div>
                         ))
                     ) : (
                         // Placeholder when no remote streams
                         remoteSocketId && (
-                            <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
+                            <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] h-[250px] md:h-[300px]">
                                 <div className="h-full flex items-center justify-center">
                                     <div className="text-center">
                                         <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
@@ -481,7 +481,7 @@ function LiveRoom() {
 
                     {/* Waiting for participants placeholder */}
                     {!remoteSocketId && (
-                        <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] max-h-[400px] md:min-h-[250px] md:max-h-none">
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-2xl overflow-hidden backdrop-blur-lg min-h-[200px] h-[250px] md:h-[300px]">
                             <div className="h-full flex items-center justify-center">
                                 <div className="text-center">
                                     <div className="text-4xl md:text-6xl mb-4 opacity-30">👤</div>
