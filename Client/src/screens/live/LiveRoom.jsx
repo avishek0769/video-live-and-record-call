@@ -20,6 +20,8 @@ function LiveRoom() {
     const [videoTransporter, setVideoTransporter] = useState()
     const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState([])
     const [canConnectToRecvTransport, setCanConnectToRecvTransport] = useState(false)
+    const [videoTracks, setVideoTracks] = useState([])
+    const [audioTracks, setAudioTracks] = useState([])
     // const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
@@ -27,6 +29,7 @@ function LiveRoom() {
     const isSendTransportConnectedRef = useRef(false)
     // const consumerTransRef = useRef(false)
     const roomJoinedRef = useRef(false)
+    const producersGot = useRef(false)
     const deviceRef = useRef(null)
     const params = {
         encodings: [
@@ -54,7 +57,7 @@ function LiveRoom() {
 
     const handleUserJoined = useCallback(({ socketId }) => {
         setRemoteSocketId(socketId)
-        console.log(`User ${socketId} joined !`)
+        // console.log(`User ${socketId} joined !`)
         socket.emit("user-joined-confirm:server", { user2Id: socketId, socketId: socket.id })
     }, [setRemoteSocketId])
 
@@ -63,14 +66,15 @@ function LiveRoom() {
         console.log(`User ${socketId} was waiting !`)
     }, [setRemoteSocketId])
 
+    let i = 0;
     const getProducers = () => {
-        let i = 0;
-        socket.emit("getProducers", producerIds => {
-            console.log("Getting Producer ", i++, producerIds)
-            producerIds.forEach(signalNewRecvTransport)
+        socket.emit("getProducers", peer => {
+            console.log("Getting Producers ", ++i, peer)
+
+            peer.forEach(signalNewRecvTransport)
             setTimeout(() => {
                 setCanConnectToRecvTransport(true)
-            }, 1500);
+            }, 1000);
         })
     }
 
@@ -84,9 +88,10 @@ function LiveRoom() {
         // Remove the remote stream
     }
 
-    const handleNewProducer = ({ producerId, i }) => {
-        console.log("New Producer", i, producerId)
-        signalNewRecvTransport(producerId)
+    const handleNewProducer = ({ newProducers, i }) => {
+        console.log("New Producer", i, newProducers)
+        isSendTransportConnectedRef.current = false
+        signalNewRecvTransport(newProducers) // TODO:
         setCanConnectToRecvTransport(true)
     }
 
@@ -97,7 +102,6 @@ function LiveRoom() {
     // Step-1: Get RTP Capabilities from the router created in the server 
     const joinRoom = () => {
         socket.emit("joinRoom", { roomId }, (data) => {
-            console.log("RtpCapabilities --> ", data.rtpCapabilities)
             setRtpCapabilities(data.rtpCapabilities)
         })
     }
@@ -122,11 +126,11 @@ function LiveRoom() {
         console.log("Called createSendTransport")
 
         socket.emit("createWebRTCTransport", { consumer: false }, ({ params }) => {
-            console.log(params)
+            // console.log(params)
             const producerTransport = deviceRef.current.createSendTransport(params)
 
             producerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
-                console.log("DTLS Params --> ", dtlsParameters)
+                // console.log("DTLS Params --> ", dtlsParameters)
                 try {
                     await socket.emit("producerTransport-connect", { dtlsParameters })
                     callback()
@@ -137,7 +141,7 @@ function LiveRoom() {
             })
 
             producerTransport.on("produce", (parameters, callback, errback) => {
-                console.log("Parameters --> ", parameters)
+                // console.log("Parameters --> ", parameters)
                 try {
                     socket.emit("producerTransport-produce", {
                         kind: parameters.kind,
@@ -147,7 +151,10 @@ function LiveRoom() {
                         callback(id)
                         if (producerExists) {
                             console.log("Producer Exists --> ", producerExists)
-                            getProducers()
+                            if(!producersGot.current){
+                                getProducers()
+                                producersGot.current = true
+                            }
                         };
                     })
                 }
@@ -185,13 +192,12 @@ function LiveRoom() {
     }, [producerTransport, myStream])
 
     // Step-3or: Create a Consumer/Receive Transport
-    const signalNewRecvTransport = useCallback((remoteProducerId) => {
+    const signalNewRecvTransport = useCallback((remoteProducerIds) => {
         console.log("Called signalNewRecvTransport")
-
-        if (consumingTransport.includes(remoteProducerId)) return;
-        else {
-            setConsumingTransport(prev => [...prev, remoteProducerId])
-        }
+        // if (consumingTransport.includes(remoteProducerId)) return;
+        // else {
+        //     setConsumingTransport(prev => [...prev, remoteProducerId])
+        // }
 
         socket.emit("createWebRTCTransport", { consumer: true }, ({ params }) => {
             if (params.error) {
@@ -199,11 +205,11 @@ function LiveRoom() {
                 return
             }
             // console.log("Parameters in Signal New Recv --> ", params)
-            console.log("Device in Signal New Recv --> ", deviceRef.current)
+            // console.log("Device in Signal New Recv --> ", deviceRef.current)
             let consumerTransport = deviceRef.current.createRecvTransport(params)
 
             consumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
-                console.log("DTLS Params --> ", dtlsParameters)
+                // console.log("DTLS Params --> ", dtlsParameters)
                 try {
                     socket.emit("consumerTransport-connect", {
                         dtlsParameters,
@@ -226,16 +232,18 @@ function LiveRoom() {
             //         serverConsumerTransportId: params.id
             //     }
             // ])
-            setConnectingConsumerTransportData(prev => [
-                ...prev,
-                {
-                    serverConsumerTransportId: params.id,
-                    remoteProducerId,
-                    consumerTransport
-                }
-            ])
+            remoteProducerIds.forEach(remoteProducerId => {
+                setConnectingConsumerTransportData(prev => [
+                    ...prev,
+                    {
+                        serverConsumerTransportId: params.id,
+                        remoteProducerId,
+                        consumerTransport
+                    }
+                ])
+            })
         })
-    }, [device, consumingTransport])
+    }, [device])
 
     // Step-4or: Create a Consumer and start receiving the prducers video feed
     const connectRecvTransport = useCallback((consumerTransport, remoteProducerId, serverConsumerTransportId) => {
@@ -252,7 +260,6 @@ function LiveRoom() {
                     return
                 }
                 let consumer = await consumerTransport.consume(params)
-                console.log("Consumer --> ", serverConsumerTransportId, consumer)
 
                 setConsumerTransport(prev => [
                     ...prev,
@@ -265,12 +272,24 @@ function LiveRoom() {
                 ])
 
                 const { track } = consumer;
-                const stream = new MediaStream([track])
 
-                setRemoteStream(prev => [...prev, stream])
+                if(track.kind == "video") setVideoTracks(prev => [...prev, track]);
+                else setAudioTracks(prev => [...prev, track]);
+
                 socket.emit("consumer-resume", { consumerId: consumer.id })
             })
     }, [consumerTransport, device])
+
+    useEffect(() => {
+        if((videoTracks.length && audioTracks.length) && (videoTracks.length == audioTracks.length)) {
+            videoTracks.forEach((videoTrack, index) => {
+                const stream = new MediaStream([videoTrack, audioTracks[index]])
+                setRemoteStream(prev => [...prev, stream])
+            })
+            setVideoTracks([])
+            setAudioTracks([])
+        }
+    }, [videoTracks, audioTracks])
 
     useEffect(() => {
         if (rtpCapabilities) {
@@ -301,6 +320,7 @@ function LiveRoom() {
 
     useEffect(() => {
         console.log(Object.keys(connectingConsumerTransportData).length, canConnectToRecvTransport)
+
         if (Object.keys(connectingConsumerTransportData).length && canConnectToRecvTransport) {
             connectingConsumerTransportData.forEach(elem => {
                 let { consumerTransport, remoteProducerId, serverConsumerTransportId } = elem;
@@ -308,7 +328,7 @@ function LiveRoom() {
             })
             setTimeout(() => {
                 setConnectingConsumerTransportData([])
-            }, 200);
+            }, 1500);
         }
     }, [canConnectToRecvTransport, connectingConsumerTransportData])
 

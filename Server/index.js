@@ -127,14 +127,14 @@ const addTransport = (transport, roomId, socketId, consumer) => {
     }
 }
 
-const addProducer = (producer, roomId, socketId) => {
+const addProducer = (producer, roomId, socketId, kind) => {
     producers = [
         ...producers,
-        { socketId, roomId, producer }
+        { socketId, roomId, producer, kind }
     ]
     peers[socketId] = {
         ...peers[socketId],
-        producers: [...peers[socketId].producers, producer.id]
+        producers: [...peers[socketId].producers, producer.id],
     }
 }
 
@@ -148,13 +148,15 @@ const addConsumer = (consumer, roomId, socketId) => {
         consumers: [...peers[socketId].consumers, consumer.id]
     }
 }
-let i = 0
-const informProducersToConsume = (socketId, roomId, producerId) => {
+const informProducersToConsume = (socketId, roomId) => {
+    let i = 0
     // console.log("Producers --> ", producers)
-    producers.forEach(producerData => {
-        if (producerData.socketId != socketId && producerData.roomId == roomId) {
-            // console.log("Inform Consumers")
-            peers[producerData.socketId].socket.emit("new-producer", { producerId, i: ++i })
+    let peersToInform = rooms[roomId].peers;
+
+    peersToInform.forEach(peerSocketId => {
+        console.log(socketId, peerSocketId, " ---> ", peers[socketId].producers)
+        if (peerSocketId != socketId && peers[socketId].producers.length == 2) {
+            peers[peerSocketId].socket.emit("new-producer", { newProducers: peers[socketId].producers, i: ++i })
         }
     })
 }
@@ -163,6 +165,17 @@ const getProducerTransport = (socketId) => {
     const [producerTransport] = transports.filter(transportData => transportData.socketId == socketId && !transportData.consumer)
     return producerTransport.transport;
 }
+
+app.get("/states", (req, res) => {
+    res.json({
+        transportsLength: transports.length,
+        producersLength: producers.length,
+        consumersLength: consumers.length,
+        transportsId: transports.map(transportData => transportData.transport.id),
+        producersId: producers.map(producerData => producerData.producer.id),
+        consumersId: consumers.map(consumerData => consumerData.consumer.id),
+    })
+})
 
 io.on("connection", async (socket) => {
     // RECORD CALLING
@@ -247,9 +260,11 @@ io.on("connection", async (socket) => {
         console.log("My Producer ID: ", producer.id)
 
         const { roomId } = peers[socket.id]
-        addProducer(producer, roomId, socket.id)
+        addProducer(producer, roomId, socket.id, kind)
 
-        informProducersToConsume(socket.id, roomId, producer.id)
+        if (peers[socket.id].producers.length == 2) {
+            informProducersToConsume(socket.id, roomId)
+        }
 
         producer.on("transportclose", () => {
             console.log('transport for this producer closed ')
@@ -258,7 +273,7 @@ io.on("connection", async (socket) => {
 
         cb({
             id: producer.id,
-            producerExists: producers.length > 1
+            producerExists: producers.length > 2
         })
     })
 
@@ -326,12 +341,12 @@ io.on("connection", async (socket) => {
         const { roomId } = peers[socket.id]
         let producerList = []
 
-        producers.forEach(producerData => {
-            if (producerData.socketId !== socket.id && producerData.roomId === roomId) {
-                producerList = [...producerList, producerData.producer.id]
+        rooms[roomId].peers.forEach(peerSocketId => {
+            if (peerSocketId != socket.id) {
+                producerList.push(peers[peerSocketId].producers)
             }
         })
-        console.log(producerList)
+        // console.log("Producer List --> ", producerList)
         cb(producerList)
     })
 
