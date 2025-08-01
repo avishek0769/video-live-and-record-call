@@ -13,24 +13,22 @@ function LiveRoom() {
     const [device, setDevice] = useState()
     const [rtpCapabilities, setRtpCapabilities] = useState()
     const [producerTransport, setProducerTransport] = useState()
-    const [consumerTransport, setConsumerTransport] = useState([])
-    const [consumingTransport, setConsumingTransport] = useState([])
-    const [consumer, setConsumer] = useState()
     const [audioTransporter, setAudioTransporter] = useState()
     const [videoTransporter, setVideoTransporter] = useState()
     const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState([])
     const [canConnectToRecvTransport, setCanConnectToRecvTransport] = useState(false)
+    const [removeStream, setRemoveStream] = useState(false)
     const [videoTracks, setVideoTracks] = useState([])
     const [audioTracks, setAudioTracks] = useState([])
-    // const [isCurrentUserProducer, setIsCurrentUserProducer] = useState(null)
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
     const producerTransRef = useRef(false)
     const isSendTransportConnectedRef = useRef(false)
-    // const consumerTransRef = useRef(false)
     const roomJoinedRef = useRef(false)
     const producersGot = useRef(false)
     const deviceRef = useRef(null)
+    const consumerTransportRef = useRef([])
+    const producerTransportRef = useRef([])
     const params = {
         encodings: [
             {
@@ -79,24 +77,42 @@ function LiveRoom() {
     }
 
     const handleProducerClose = ({ remoteProducerId }) => {
-        const producerToClose = consumerTransport.find(transportData => transportData.producerId === remoteProducerId)
-        producerToClose.consumerTransport.close()
+        const producerToClose = consumerTransportRef.current.find(transportData => transportData.remoteProducerId === remoteProducerId)
+        consumerTransportRef.current = consumerTransportRef.current.filter(transportData => transportData.remoteProducerId !== remoteProducerId)
+
+        producerToClose.transport.close()
         producerToClose.consumer.close()
 
-        setConsumerTransport(prev => prev.filter(transportData => transportData.producerId !== remoteProducerId))
-
-        // Remove the remote stream
+        setRemoveStream(true)
+        setShowUserLeftPopup(true)
+        setTimeout(() => {
+            setShowUserLeftPopup(false)
+        }, 2500);
     }
 
     const handleNewProducer = ({ newProducers, i }) => {
         console.log("New Producer", i, newProducers)
         isSendTransportConnectedRef.current = false
-        signalNewRecvTransport(newProducers) // TODO:
+        signalNewRecvTransport(newProducers)
         setCanConnectToRecvTransport(true)
     }
 
     const handleCallEnd = () => {
-
+        producerTransportRef.current.forEach(producerData => {
+            producerData.transport.close()
+            producerData.producer.close()
+        })
+        consumerTransportRef.current.forEach(consumerData => {
+            consumerData.transport.close()
+            consumerData.consumer.close()
+        })
+        
+        myStream.getTracks().forEach(track => {
+            track.stop();
+        });
+        setMyStream(null)
+        navigate("/live");
+        setTimeout(() => window.location.reload(), 200);
     }
 
     // Step-1: Get RTP Capabilities from the router created in the server 
@@ -174,6 +190,17 @@ function LiveRoom() {
         let newVideoProducer = await producerTransport.produce({ track: videoTrack, params });
         let newAudioProducer = await producerTransport.produce({ track: audioTrack });
 
+        producerTransportRef.current = [
+            {
+                transport: producerTransport,
+                producer: newVideoProducer,
+            },
+            {
+                transport: producerTransport,
+                producer: newAudioProducer,
+            }
+        ]
+
         newVideoProducer.on("trackend", () => {
             console.log("Video Track ended")
         })
@@ -194,18 +221,12 @@ function LiveRoom() {
     // Step-3or: Create a Consumer/Receive Transport
     const signalNewRecvTransport = useCallback((remoteProducerIds) => {
         console.log("Called signalNewRecvTransport")
-        // if (consumingTransport.includes(remoteProducerId)) return;
-        // else {
-        //     setConsumingTransport(prev => [...prev, remoteProducerId])
-        // }
 
         socket.emit("createWebRTCTransport", { consumer: true }, ({ params }) => {
             if (params.error) {
                 console.error(params.error)
                 return
             }
-            // console.log("Parameters in Signal New Recv --> ", params)
-            // console.log("Device in Signal New Recv --> ", deviceRef.current)
             let consumerTransport = deviceRef.current.createRecvTransport(params)
 
             consumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
@@ -223,15 +244,6 @@ function LiveRoom() {
                 }
             })
 
-            // setConsumerTransport(prev => [
-            //     ...prev,
-            //     {
-            //         consumerTransport,
-            //         remoteProducerId,
-            //         consumer,
-            //         serverConsumerTransportId: params.id
-            //     }
-            // ])
             remoteProducerIds.forEach(remoteProducerId => {
                 setConnectingConsumerTransportData(prev => [
                     ...prev,
@@ -261,15 +273,15 @@ function LiveRoom() {
                 }
                 let consumer = await consumerTransport.consume(params)
 
-                setConsumerTransport(prev => [
-                    ...prev,
+                consumerTransportRef.current = [
+                    ...consumerTransportRef.current,
                     {
-                        consumerTransport,
+                        transport: consumerTransport,
                         remoteProducerId,
                         consumer,
                         serverConsumerTransportId
                     }
-                ])
+                ]
 
                 const { track } = consumer;
 
@@ -278,7 +290,7 @@ function LiveRoom() {
 
                 socket.emit("consumer-resume", { consumerId: consumer.id })
             })
-    }, [consumerTransport, device])
+    }, [device])
 
     useEffect(() => {
         if((videoTracks.length && audioTracks.length) && (videoTracks.length == audioTracks.length)) {
@@ -300,14 +312,9 @@ function LiveRoom() {
     useEffect(() => {
         if (device) {
             if (!producerTransRef.current) {
-                console.log("UseEffect to CreateSendTransport")
                 createSendTransport();
                 producerTransRef.current = true
             }
-            // else if(!consumerTransRef.current) {
-            //     createRecvTransport();
-            //     consumerTransRef.current = true
-            // }
         }
     }, [device])
 
@@ -319,8 +326,6 @@ function LiveRoom() {
     }, [producerTransport, myStream])
 
     useEffect(() => {
-        console.log(Object.keys(connectingConsumerTransportData).length, canConnectToRecvTransport)
-
         if (Object.keys(connectingConsumerTransportData).length && canConnectToRecvTransport) {
             connectingConsumerTransportData.forEach(elem => {
                 let { consumerTransport, remoteProducerId, serverConsumerTransportId } = elem;
@@ -340,11 +345,18 @@ function LiveRoom() {
                 })
         }
         if (myStream && !roomJoinedRef.current) {
-            // console.log("Join Room Called", "Room joined", roomJoinedRef.current)
             joinRoom()
             roomJoinedRef.current = true
         }
     }, [myStream])
+
+    useEffect(() => {
+        if(removeStream && remoteStream) {
+            let filteredStream = remoteStream.filter(stream => stream.active)
+            setRemoteStream(filteredStream)
+            setRemoveStream(false)
+        }
+    }, [remoteStream, removeStream])
 
     useEffect(() => {
         socket.on("user-joined", handleUserJoined)
@@ -376,21 +388,25 @@ function LiveRoom() {
         <div className="min-h-screen bg-gray-950 text-white font-sans">
             {/* User Left Popup */}
             {showUserLeftPopup && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
-                    <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-red-500/30 rounded-2xl p-6 md:p-8 mx-4 max-w-md w-full text-center shadow-2xl shadow-red-500/20">
-                        <div className="text-4xl md:text-5xl mb-4">👋</div>
-                        <h3 className="text-xl md:text-2xl font-bold text-red-400 mb-2">
-                            User Left
-                        </h3>
-                        <p className="text-gray-300 text-sm md:text-base mb-4">
-                            The other participant has left the call
-                        </p>
-                        <button
-                            onClick={() => setShowUserLeftPopup(false)}
-                            className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium rounded-lg hover:shadow-lg transition-all duration-200"
-                        >
-                            Dismiss
-                        </button>
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-slide-down">
+                    <div className="bg-gradient-to-r from-gray-900/95 to-gray-800/95 border border-red-500/40 rounded-xl px-4 py-3 mx-4 backdrop-blur-lg shadow-2xl shadow-red-500/20 w-[280px] md:w-auto">
+                        <div className="flex items-center gap-3">
+                            <div className="text-2xl">👋</div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-red-400">
+                                    User Left
+                                </h3>
+                                <p className="text-gray-300 text-xs">
+                                    Participant has left the call
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowUserLeftPopup(false)}
+                                className="ml-2 text-gray-400 hover:text-white transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
