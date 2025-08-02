@@ -77,11 +77,11 @@ function LiveRoom() {
     }
 
     const handleProducerClose = ({ remoteProducerId }) => {
-        const producerToClose = consumerTransportRef.current.find(transportData => transportData.remoteProducerId === remoteProducerId)
+        const consumerToClose = consumerTransportRef.current.find(transportData => transportData.remoteProducerId === remoteProducerId)
         consumerTransportRef.current = consumerTransportRef.current.filter(transportData => transportData.remoteProducerId !== remoteProducerId)
 
-        producerToClose.transport.close()
-        producerToClose.consumer.close()
+        consumerToClose.transport.close()
+        consumerToClose.consumer.close()
 
         setRemoveStream(true)
         setShowUserLeftPopup(true)

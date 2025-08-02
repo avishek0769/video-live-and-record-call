@@ -354,6 +354,34 @@ io.on("connection", async (socket) => {
         const consumer = consumers.find(consumerData => consumerData.consumer.id === consumerId).consumer
         await consumer.resume()
     })
+
+    socket.on("disconnect", () => {
+        if(peers[socket.id]){
+            peers[socket.id].transports.forEach(transportId => {
+                transports = transports.filter(transportData => transportData.transport.id != transportId)
+            })
+            peers[socket.id].producers.forEach(producerId => {
+                producers = producers.filter(producerData => producerData.producer.id != producerId)
+            })
+            peers[socket.id].consumers.forEach(consumerId => {
+                consumers = consumers.filter(consumerData => consumerData.consumer.id != consumerId)
+            })
+
+            transports = transports.filter(transportData => transportData.socketId != socket.id)
+            producers = producers.filter(producerData => producerData.socketId != socket.id)
+            consumers = consumers.filter(consumerData => consumerData.socketId != socket.id)
+
+            let roomId = peers[socket.id].roomId;
+            if (roomId && rooms[roomId]) {
+                rooms[roomId].peers = rooms[roomId].peers.filter(peerSocketId => peerSocketId != socket.id)
+                if (rooms[roomId].peers.length == 0) {
+                    delete rooms[roomId]
+                }
+            }
+
+            delete peers[socket.id]
+        }
+    })
 })
 
 server.listen(3000, () => console.log("Server running on PORT ", process.env.PORT))
