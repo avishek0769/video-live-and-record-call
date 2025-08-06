@@ -4,23 +4,38 @@ dotenv.config({
 import { Server } from "socket.io"
 import { CLIENT_ADDRESS } from "../constants.js"
 import https from "https"
+import http from "http"
 import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
 import mediasoup from "mediasoup"
 import fs from "fs"
+import path from "path"
 
-const options = {
-    key: fs.readFileSync('../ssl/key.pem', 'utf-8'),
-    cert: fs.readFileSync('../ssl/cert.pem', 'utf-8')
-}
+// const options = {
+//     key: fs.readFileSync('../ssl/key.pem', 'utf-8'),
+//     cert: fs.readFileSync('../ssl/cert.pem', 'utf-8')
+// }
 
 const app = express()
-const server = https.createServer(options, app)
+// const server = https.createServer(options, app)
+const server = http.createServer(app)
+const __dirname = path.resolve();
 
 app.use(cors({
     origin: CLIENT_ADDRESS
 }))
+app.use(express.static("./dist"))
+
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist/index.html'));
+})
+app.get("/live", (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist/index.html'));
+})
+app.get("/record", (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist/index.html'));
+})
 
 const io = new Server(server, {
     cors: {
