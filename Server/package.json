@@ -2,6 +2,7 @@
   "dependencies": {
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "mediasoup": "^3.16.8",
     "socket.io": "^4.8.1",
     "twilio": "^5.8.0"
   },
@@ -16,5 +17,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {}
 }

@@ -25,4 +25,8 @@ dist-ssr
 .env
 *.env
 
+<<<<<<< HEAD
+=======
+todo.txt
+>>>>>>> feat/sfu
 ssl

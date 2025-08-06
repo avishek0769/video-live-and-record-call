@@ -27,7 +27,7 @@ const router = createBrowserRouter([
         element: <LiveLobby />
       },
       {
-        path: "/live/room",
+        path: "/live/room/:roomId",
         element: <LiveRoom />
       },
     ]
