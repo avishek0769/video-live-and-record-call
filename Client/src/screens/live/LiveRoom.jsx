@@ -29,28 +29,25 @@ function LiveRoom() {
     const deviceRef = useRef(null)
     const consumerTransportRef = useRef([])
     const producerTransportRef = useRef([])
-    const params = {
-        encodings: [
-            {
-                rid: 'r0',
-                maxBitrate: 100000,
-                scalabilityMode: 'S1T3',
-            },
-            {
-                rid: 'r1',
-                maxBitrate: 300000,
-                scalabilityMode: 'S1T3',
-            },
-            {
-                rid: 'r2',
-                maxBitrate: 900000,
-                scalabilityMode: 'S1T3',
-            },
-        ],
-        codecOptions: {
-            videoGoogleStartBitrate: 1000
-        }
-    }
+    // const params = {
+    //     encodings: [
+    //         {
+    //             rid: 'r0',
+    //             maxBitrate: 100000,
+    //         },
+    //         {
+    //             rid: 'r1',
+    //             maxBitrate: 300000,
+    //         },
+    //         {
+    //             rid: 'r2',
+    //             maxBitrate: 900000,
+    //         },
+    //     ],
+    //     codecOptions: {
+    //         videoGoogleStartBitrate: 1000
+    //     }
+    // }
     const { roomId } = useParams()
 
     const handleUserJoined = useCallback(({ socketId }) => {
@@ -146,7 +143,7 @@ function LiveRoom() {
             const producerTransport = deviceRef.current.createSendTransport(params)
 
             producerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
-                // console.log("DTLS Params --> ", dtlsParameters)
+                console.log("DTLS Params on Producer Connect --> ", dtlsParameters)
                 try {
                     await socket.emit("producerTransport-connect", { dtlsParameters })
                     callback()
@@ -157,14 +154,14 @@ function LiveRoom() {
             })
 
             producerTransport.on("produce", (parameters, callback, errback) => {
-                // console.log("Parameters --> ", parameters)
+                console.log("Parameters on Producer Produce --> ", parameters)
                 try {
                     socket.emit("producerTransport-produce", {
                         kind: parameters.kind,
                         rtpParameters: parameters.rtpParameters,
                         appData: parameters.appData,
                     }, ({ id, producerExists }) => {
-                        callback(id)
+                        callback({ id })
                         if (producerExists) {
                             console.log("Producer Exists --> ", producerExists)
                             if(!producersGot.current){
@@ -175,7 +172,7 @@ function LiveRoom() {
                     })
                 }
                 catch (error) {
-                    errback(errback)
+                    errback(error)
                 }
             })
             setProducerTransport(producerTransport)
@@ -186,10 +183,10 @@ function LiveRoom() {
     const connectSendTransport = useCallback(async () => {
         let videoTrack = myStream.getVideoTracks()[0]
         let audioTrack = myStream.getAudioTracks()[0]
-
-        let newVideoProducer = await producerTransport.produce({ track: videoTrack, params });
+        
+        let newVideoProducer = await producerTransport.produce({ track: videoTrack });
         let newAudioProducer = await producerTransport.produce({ track: audioTrack });
-
+        
         producerTransportRef.current = [
             {
                 transport: producerTransport,

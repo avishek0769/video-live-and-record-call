@@ -88,7 +88,7 @@ const createWebRTCTransport = async (router) => {
         try {
             let transport = await router.createWebRtcTransport({
                 listenIps: [
-                    { ip: '192.168.1.38' }
+                    { ip: '127.0.0.1' }
                 ],
                 enableUdp: true,
                 enableTcp: true,

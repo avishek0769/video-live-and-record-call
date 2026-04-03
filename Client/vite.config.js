@@ -6,17 +6,17 @@ import fs from 'fs'
 export default defineConfig({
     plugins: [react()],
     server: {
-        // proxy: {
-        //     '/api': {
-        //         target: 'https://xbsmsrft-3000.inc1.devtunnels.ms', // Replace with your API URL
-        //         changeOrigin: true,
-        //         secure: false,
-        //     },
-        // },
-        https: {
-            key: fs.readFileSync('../ssl/key.pem'),
-            cert: fs.readFileSync('../ssl/cert.pem'),
+        proxy: {
+            '/api': {
+                target: 'https://xbsmsrft-3000.inc1.devtunnels.ms', // Replace with your API URL
+                changeOrigin: true,
+                secure: false,
+            },
         },
-        host: "192.168.1.38"
+        // https: {
+        //     key: fs.readFileSync('../ssl/key.pem'),
+        //     cert: fs.readFileSync('../ssl/cert.pem'),
+        // },
+        // host: "192.168.1.38"
     },
 })

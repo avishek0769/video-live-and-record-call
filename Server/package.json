@@ -2,7 +2,7 @@
   "dependencies": {
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
-    "mediasoup": "^3.16.8",
+    "mediasoup": "^3.19.14",
     "socket.io": "^4.8.1",
     "twilio": "^5.8.0"
   },
@@ -12,11 +12,10 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon index.js"
+    "dev": "node --watch index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
-  "devDependencies": {}
+  "description": ""
 }
