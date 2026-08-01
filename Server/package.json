@@ -12,8 +12,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "postinstall": "npm explore mediasoup -- npm run worker:build"
   },
   "keywords": [],
   "author": "",
