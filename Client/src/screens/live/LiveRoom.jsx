@@ -15,12 +15,11 @@ function LiveRoom() {
     const [producerTransport, setProducerTransport] = useState()
     const [audioTransporter, setAudioTransporter] = useState()
     const [videoTransporter, setVideoTransporter] = useState()
-    const [connectingConsumerTransportData, setConnectingConsumerTransportData] = useState([])
-    const [canConnectToRecvTransport, setCanConnectToRecvTransport] = useState(false)
     const [removeStream, setRemoveStream] = useState(false)
-    const [videoTracks, setVideoTracks] = useState([])
-    const [audioTracks, setAudioTracks] = useState([])
-    const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(false)
+    const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(true)
+    const pendingVideoTracksRef = useRef({})
+    const pendingAudioTracksRef = useRef({})
+    const consumedProducerIdsRef = useRef(new Set()) // prevents duplicate consumers
     const socket = useContext(SocketContext)
     const navigate = useNavigate()
     const producerTransRef = useRef(false)
@@ -66,11 +65,8 @@ function LiveRoom() {
     const getProducers = () => {
         socket.emit("getProducers", peer => {
             console.log("Getting Producers ", ++i, peer)
-
-            peer.forEach(signalNewRecvTransport)
-            setTimeout(() => {
-                setCanConnectToRecvTransport(true)
-            }, 1000);
+            const flatProducerIds = peer.flat()
+            signalNewRecvTransport(flatProducerIds)
         })
     }
 
@@ -90,9 +86,7 @@ function LiveRoom() {
 
     const handleNewProducer = ({ newProducers, i }) => {
         console.log("New Producer", i, newProducers)
-        isSendTransportConnectedRef.current = false
         signalNewRecvTransport(newProducers)
-        setCanConnectToRecvTransport(true)
     }
 
     const handleCallEnd = () => {
@@ -216,9 +210,9 @@ function LiveRoom() {
         setAudioTransporter(newAudioProducer)
     }, [producerTransport, myStream])
 
-    // Step-3or: Create a Consumer/Receive Transport
+    // Step-3or: Create a Consumer/Receive Transport and immediately consume each producer
     const signalNewRecvTransport = useCallback((remoteProducerIds) => {
-        console.log("Called signalNewRecvTransport")
+        console.log("Called signalNewRecvTransport", remoteProducerIds)
 
         socket.emit("createWebRTCTransport", { consumer: true }, ({ params }) => {
             if (params.error) {
@@ -228,7 +222,6 @@ function LiveRoom() {
             let consumerTransport = deviceRef.current.createRecvTransport(params)
 
             consumerTransport.on("connect", ({ dtlsParameters }, callback, errback) => {
-                // console.log("DTLS Params --> ", dtlsParameters)
                 try {
                     socket.emit("consumerTransport-connect", {
                         dtlsParameters,
@@ -237,27 +230,26 @@ function LiveRoom() {
                     callback()
                 }
                 catch (error) {
-                    console.log(errback)
-                    errback(errback)
+                    errback(error)
                 }
             })
 
+            // Immediately consume each producer — no deferred state needed
             remoteProducerIds.forEach(remoteProducerId => {
-                setConnectingConsumerTransportData(prev => [
-                    ...prev,
-                    {
-                        serverConsumerTransportId: params.id,
-                        remoteProducerId,
-                        consumerTransport
-                    }
-                ])
+                connectRecvTransport(consumerTransport, remoteProducerId, params.id)
             })
         })
     }, [device])
 
-    // Step-4or: Create a Consumer and start receiving the prducers video feed
+    // Step-4or: Create a Consumer and start receiving the producer's video/audio feed
     const connectRecvTransport = useCallback((consumerTransport, remoteProducerId, serverConsumerTransportId) => {
-        console.log("Called connectRecvTransport")
+        // Guard against duplicate consumption (e.g. if new-producer fires twice)
+        if (consumedProducerIdsRef.current.has(remoteProducerId)) {
+            console.log("Already consuming producer", remoteProducerId, "— skipping")
+            return
+        }
+        consumedProducerIdsRef.current.add(remoteProducerId)
+        console.log("Called connectRecvTransport for", remoteProducerId)
 
         socket.emit("consumerTransport-consume", {
             rtpCapabilities: deviceRef.current.rtpCapabilities,
@@ -267,6 +259,7 @@ function LiveRoom() {
             async ({ params }) => {
                 if (params.error) {
                     console.error(params.error)
+                    consumedProducerIdsRef.current.delete(remoteProducerId)
                     return
                 }
                 let consumer = await consumerTransport.consume(params)
@@ -284,23 +277,35 @@ function LiveRoom() {
                 const { track } = consumer;
                 console.log("Track", track)
 
-                if(track.kind == "video") setVideoTracks(prev => [...prev, track]);
-                else setAudioTracks(prev => [...prev, track]);
-
                 socket.emit("consumer-resume", { consumerId: consumer.id })
+
+                // Accumulate tracks in refs and build MediaStream when both video+audio arrive
+                if (track.kind === "video") {
+                    pendingVideoTracksRef.current[remoteProducerId] = track
+                } else {
+                    pendingAudioTracksRef.current[remoteProducerId] = track
+                }
+
+                const videoKeys = Object.keys(pendingVideoTracksRef.current)
+                const audioKeys = Object.keys(pendingAudioTracksRef.current)
+                const minPaired = Math.min(videoKeys.length, audioKeys.length)
+                if (minPaired > 0) {
+                    const newStreams = []
+                    for (let idx = 0; idx < minPaired; idx++) {
+                        const vTrack = pendingVideoTracksRef.current[videoKeys[idx]]
+                        const aTrack = pendingAudioTracksRef.current[audioKeys[idx]]
+                        newStreams.push(new MediaStream([vTrack, aTrack]))
+                        delete pendingVideoTracksRef.current[videoKeys[idx]]
+                        delete pendingAudioTracksRef.current[audioKeys[idx]]
+                    }
+                    setRemoteStream(prev => [...prev, ...newStreams])
+                }
             })
     }, [device])
 
-    useEffect(() => {
-        if((videoTracks.length && audioTracks.length) && (videoTracks.length == audioTracks.length)) {
-            videoTracks.forEach((videoTrack, index) => {
-                const stream = new MediaStream([videoTrack, audioTracks[index]])
-                setRemoteStream(prev => [...prev, stream])
-            })
-            setVideoTracks([])
-            setAudioTracks([])
-        }
-    }, [videoTracks, audioTracks])
+    // Track pairing is now handled inline in connectRecvTransport via refs (see above)
+    // This effect is intentionally removed to avoid the race condition where
+    // videoTracks and audioTracks state updates weren't synchronised
 
     useEffect(() => {
         if (rtpCapabilities) {
@@ -324,17 +329,9 @@ function LiveRoom() {
         }
     }, [producerTransport, myStream])
 
-    useEffect(() => {
-        if (Object.keys(connectingConsumerTransportData).length && canConnectToRecvTransport) {
-            connectingConsumerTransportData.forEach(elem => {
-                let { consumerTransport, remoteProducerId, serverConsumerTransportId } = elem;
-                connectRecvTransport(consumerTransport, remoteProducerId, serverConsumerTransportId)
-            })
-            setTimeout(() => {
-                setConnectingConsumerTransportData([])
-            }, 1500);
-        }
-    }, [canConnectToRecvTransport, connectingConsumerTransportData])
+    // Consumer transport creation + consumption is now handled directly in signalNewRecvTransport.
+    // The old canConnectToRecvTransport + connectingConsumerTransportData effect has been removed
+    // because it re-ran on every state change, creating duplicate consumers.
 
     useEffect(() => {
         if (!myStream && !roomJoinedRef.current) {

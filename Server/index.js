@@ -1,12 +1,9 @@
-dotenv.config({
-    path: "./.env"
-})
+import "dotenv/config"
 import { Server } from "socket.io"
 import { CLIENT_ADDRESS } from "../constants.js"
 import https from "https"
 import http from "http"
 import express from "express"
-import dotenv from "dotenv"
 import cors from "cors"
 import mediasoup from "mediasoup"
 import fs from "fs"
@@ -39,7 +36,7 @@ app.get("/record", (req, res) => {
 
 const io = new Server(server, {
     cors: {
-        origin: CLIENT_ADDRESS
+        origin: "*"
     }
 })
 
@@ -382,7 +379,7 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("disconnect", () => {
-        if(peers[socket.id]){
+        if (peers[socket.id]) {
             peers[socket.id].transports.forEach(transportId => {
                 transports = transports.filter(transportData => transportData.transport.id != transportId)
             })
